@@ -39,6 +39,7 @@ def get_data(conn, api_token,
     calculate_daily(conn)
 
 
+# TODO Request these as user input...
 stations = ["GHCND:USW00093721", "GHCND:USW00093738"]  # Stations: [BWI, Dulles]
 
 def query_api(api_token, start_date, end_date):
@@ -77,7 +78,22 @@ def query_api(api_token, start_date, end_date):
     except ValueError:
         print("Error Decoding Weather Data")
         print(response.text)
-        return {}
+        return {
+            "results": [ 
+                {
+                    "date": "2019-04-09T00:00:00",
+                    "value": 2
+                },
+                {
+                    "date": "2019-04-08T00:00:00",
+                    "value": 2
+                },
+                {
+                    "date": "2019-04-07T00:00:00",
+                    "value": 2
+                }
+            ]
+        }
 
 
 def intervals(num_stations, start_date, end_date):
@@ -133,6 +149,9 @@ def store_raw_data(conn, api_token, start_date, end_date):
                 day = entry["date"]
                 val = entry["value"]
 
+                print(day)
+                print(val)
+
                 cur.execute("""INSERT INTO weather_raw(day, value) 
                     VALUES(?,?)""", (day, val))
 
@@ -148,7 +167,7 @@ def calculate_daily(conn):
     cur.execute("""
     INSERT OR IGNORE INTO weather_day
     SELECT
-        DATE(day, 'unixepoch') as realday,
+        DATE(day) as realday,
         AVG(value)
     FROM weather_raw GROUP BY realday
     """)

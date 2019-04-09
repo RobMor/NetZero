@@ -121,14 +121,14 @@ def store_raw_data(conn, files):
 
     # Iterate through each entry
     for entry in bar:
-        # Find the text within the title tag
-        title = entry.find(tags["title"]).text
+        # Find the IntervalBlock tag underneath the content tag
+        content = entry.find(tags["content"])
+        block = None
+        if content:
+            block = content.find(tags["IntervalBlock"])
 
-        # Only care about entries titled "Energy Usage"
-        if title == "Energy Usage":
-            # Traverse structure
-            block = entry.find(tags["content"]).find(tags["IntervalBlock"])
-            
+        # Only care about entries with IntervalBlock tags
+        if block:            
             # Iterate through the readings, storing each one in the database
             for reading in block.findall(tags["IntervalReading"]):
                 # Read start time and usage in Wh from XML file
