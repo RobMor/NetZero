@@ -1,5 +1,9 @@
 """Data source specification for Solar Edge data.
 
+SolarEdge supplies an API with their solar panels which allows you to view
+the power supplied by you panels in high detail. In this module we collect that
+data and convert it into a useful daily summation of energy production.
+
 Solar Edge API documentation (ca 2019):
 https://www.solaredge.com/sites/default/files/se_monitoring_api.pdf
 """
