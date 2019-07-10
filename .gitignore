@@ -1,0 +1,8 @@
+__pycache__/
+
+# Ignore personal configurations
+options.json
+
+# Ignore database files
+*.db
+*.sqlite3
