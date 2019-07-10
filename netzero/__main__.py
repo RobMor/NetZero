@@ -21,10 +21,10 @@ def collect_data(arguments):
 
     for source in initialized_sources:
         # Collect the raw data from the source
-        source.collect_data(start=arguments.begin, end=arguments.end)
+        source.collect_data(start_date=arguments.begin, end_date=arguments.end)
 
         # Process the data from the source
-        source.process_data(start=arguments.begin, end=arguments.end)
+        source.process_data()
 
 
 def format_data(arguments):
@@ -47,8 +47,8 @@ if __name__ == "__main__":
     sources_group = collect_parser.add_argument_group("Data Sources", description="Flags used to select the supported data sources")
     sources_group.add_argument("-s", "--solar", help="Collects solar data", dest="sources", action="append_const", const=netzero.sources.Solar)
     sources_group.add_argument("-p", "--pepco", help="Collects pepco data", dest="sources", action="append_const", const=netzero.sources.Pepco)
-    sources_group.add_argument("-g", "--gshp", help="Collects ground source heat pump data", dest="sources", action="append_const", const=netzero.sources.Gshp)
-    sources_group.add_argument("-w", "--weather", help="Collects weather data", dest="sources", action="append_const", const=netzero.sources.Weather)
+    # sources_group.add_argument("-g", "--gshp", help="Collects ground source heat pump data", dest="sources", action="append_const", const=netzero.sources.Gshp)
+    # sources_group.add_argument("-w", "--weather", help="Collects weather data", dest="sources", action="append_const", const=netzero.sources.Weather)
 
     collect_parser.add_argument("-c", required=True, metavar="config", help="Loads inputs from the specified JSON file", dest="config", type=argparse.FileType('r'))
 

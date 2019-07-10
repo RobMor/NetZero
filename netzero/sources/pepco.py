@@ -37,7 +37,7 @@ Green Button XML Format for Documentation Purposes:
 """
 
 import sqlite3
-from datetime import datetime
+import datetime
 import itertools
 import xml.etree.ElementTree as ETree
 
@@ -90,9 +90,9 @@ class Pepco(DataSource):
 
         Parameters
         ----------
-        start : datetime.datetime.DateTime, optional
+        start : datetime.datetime, optional
             The start of the data collection range
-        end : datetime.datetime.DateTime, optional
+        end : datetime.datetime, optional
             The end of the data collection range
         """
         cursor = self.conn.cursor()
@@ -114,7 +114,7 @@ class Pepco(DataSource):
                 for reading in block.findall(tags["IntervalReading"]):
                     # Read start time and usage in Wh from XML file
                     start = int(reading.find(tags["timePeriod"]).find(tags["start"]).text)
-                    start = datetime.fromtimestamp(start).strftime(r"%Y-%m-%d %H:%M:%S")
+                    start = datetime.datetime.fromtimestamp(start).strftime(r"%Y-%m-%d %H:%M:%S")
                     value = int(reading.find(tags["value"]).text)
 
                     cursor.execute("""
@@ -144,7 +144,7 @@ class Pepco(DataSource):
 
         return entries
 
-    def process_data(self, start=None, end=None) -> None:
+    def process_data(self) -> None:
         """Processes the PEPCO data in the database.
 
         Calculates the daily power usage in kWh for each day in pepco_raw.

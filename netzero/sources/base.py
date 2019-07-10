@@ -16,7 +16,7 @@ class DataSource(abc.ABC):
         pass
 
     @abc.abstractmethod
-    def process_data(self, start=None, end=None):
+    def process_data(self):
         pass
     
     @property
