@@ -5,4 +5,4 @@ setup(name='NetZeroData',
       description='A collection of tools to mine data on the efficiency of a house',
       author='Robert Morrison',
       author_email='robbieguy98@gmail.com',
-      install_requires=["pandas","requests","progressbar2","beautifulsoup4"])
+      install_requires=["requests"])
