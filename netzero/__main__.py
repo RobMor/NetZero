@@ -13,7 +13,7 @@ def collect_data(arguments):
     else:
         config = None
 
-    conn = arguments.database
+    conn = sqlite3.connect(arguments.database, detect_types=sqlite3.PARSE_DECLTYPES)
 
     initialized_sources = []
     for source in arguments.sources:
@@ -47,21 +47,15 @@ if __name__ == "__main__":
     sources_group = collect_parser.add_argument_group("Data Sources", description="Flags used to select the supported data sources")
     sources_group.add_argument("-s", "--solar", help="Collects solar data", dest="sources", action="append_const", const=netzero.sources.Solar)
     sources_group.add_argument("-p", "--pepco", help="Collects pepco data", dest="sources", action="append_const", const=netzero.sources.Pepco)
-    # sources_group.add_argument("-g", "--gshp", help="Collects ground source heat pump data", dest="sources", action="append_const", const=netzero.sources.Gshp)
+    sources_group.add_argument("-g", "--gshp", help="Collects ground source heat pump data", dest="sources", action="append_const", const=netzero.sources.Gshp)
     sources_group.add_argument("-w", "--weather", help="Collects weather data", dest="sources", action="append_const", const=netzero.sources.Weather)
 
     collect_parser.add_argument("-c", required=True, metavar="config", help="Loads inputs from the specified JSON file", dest="config", type=argparse.FileType('r'))
 
-    def parse_date(string):
-        try:
-            return datetime.datetime.strptime(string, r"%Y-%m-%d")
-        except ValueError:
-            raise argparse.ArgumentTypeError("%s doesn't follow the format YYYY-MM-DD" % string)
+    collect_parser.add_argument("-b", "--begin", metavar="YYYY-MM-DD", help="Start date for date range", dest="begin", type=datetime.datetime.fromisoformat)
+    collect_parser.add_argument("-e", "--end", metavar="YYYY-MM-DD", help="End date for date range", dest="end", type=datetime.datetime.fromisoformat)
 
-    collect_parser.add_argument("-b", "--begin", metavar="YYYY-MM-DD", help="Start date for date range", dest="begin", type=parse_date)
-    collect_parser.add_argument("-e", "--end", metavar="YYYY-MM-DD", help="End date for date range", dest="end", type=parse_date)
-
-    collect_parser.add_argument("database", type=sqlite3.connect)
+    collect_parser.add_argument("database")
 
     # --- Formatting Arguments ---
     format_parser = subparsers.add_parser("format", description="Format data")
