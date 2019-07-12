@@ -28,19 +28,16 @@ class Solar(DataSource):
 
         self.conn = conn
 
-        cursor = self.conn.cursor()
-
-        # Create the table for the raw data
-        cursor.execute("""
-            CREATE TABLE IF NOT EXISTS solar_raw(time TEXT PRIMARY KEY, value REAL)
-        """)
-        
-        # Create the table for the processed data
-        cursor.execute("""
-            CREATE TABLE IF NOT EXISTS solar_day(date TEXT PRIMARY KEY, value REAL)
-        """)
-
-        self.conn.commit()
+        with self.conn:
+            # Create the table for the raw data
+            self.conn.execute("""
+                CREATE TABLE IF NOT EXISTS solar_raw(time TEXT PRIMARY KEY, value REAL)
+            """)
+            
+            # Create the table for the processed data
+            self.conn.execute("""
+                CREATE TABLE IF NOT EXISTS solar_day(date TEXT PRIMARY KEY, value REAL)
+            """)
 
     def collect_data(self, start_date=None, end_date=None):
         """Collect raw solar data from SolarEdge
@@ -59,24 +56,21 @@ class Solar(DataSource):
         if end_date is None:
             end_date = self.default_end
 
-        cursor = self.conn.cursor()
-
         # Iterate through each date range
         for interval in util.time_intervals(start_date, end_date, days=30):
             result = self.query_api(interval[0], interval[1])
 
-            for entry in result["energy"]["values"]:
-                # Parse the time from the given string
-                date = entry["date"]
-                value = entry["value"] or 0  # 0 if None
+            with self.conn:
+                for entry in result["energy"]["values"]:
+                    # Parse the time from the given string
+                    date = entry["date"]
+                    value = entry["value"] or 0  # 0 if None
 
-                cursor.execute("""
-                    INSERT OR IGNORE INTO solar_raw(time, value) VALUES(?,?)
-                """, (date, value))
+                    self.conn.execute("""
+                        INSERT OR IGNORE INTO solar_raw(time, value) VALUES(?,?)
+                    """, (date, value))
 
-                print("SOLAR:", date, "--", value)
-        
-        self.conn.commit()
+                    print("SOLAR:", date, "--", value)
 
     def query_api(self, start_date, end_date):
         """A method to query the Solar Edge api for energy data
@@ -116,17 +110,13 @@ class Solar(DataSource):
 
     def process_data(self):
         """Computes the daily input of the solar panels in kWh."""
-        cursor = self.conn.cursor()
-
-        # Developers note, these dates are in EST already so we can just directly
-        # convert them
-        cursor.execute("""
-            INSERT OR IGNORE INTO solar_day
-            SELECT
-                DATE(time, 'start of day') AS day,
-                SUM(value) / 1000.0
-            FROM solar_raw GROUP BY day
-        """)
-
-        self.conn.commit()
-
+        with self.conn:
+            # Developers note, these dates are in EST already so we can just directly
+            # convert them
+            cursor.execute("""
+                INSERT OR IGNORE INTO solar_day
+                SELECT
+                    DATE(time, 'start of day') AS day,
+                    SUM(value) / 1000.0
+                FROM solar_raw GROUP BY day
+            """)

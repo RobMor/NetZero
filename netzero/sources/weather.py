@@ -16,20 +16,17 @@ class Weather(DataSource):
 
         self.conn = conn
 
-        cursor = self.conn.cursor()
-
-        # Create the table for the raw data
-        # We collect data from multiple stations for each day so date cant be primary key
-        cursor.execute("""
-            CREATE TABLE IF NOT EXISTS weather_raw(time TEXT, value REAL)
-        """)
-        
-        # Create the table for the processed data
-        cursor.execute("""
-            CREATE TABLE IF NOT EXISTS weather_day(date TEXT PRIMARY KEY, value REAL)
-        """)
-
-        self.conn.commit()
+        with self.conn:
+            # Create the table for the raw data
+            # We collect data from multiple stations for each day so date cant be primary key
+            self.conn.execute("""
+                CREATE TABLE IF NOT EXISTS weather_raw(time TEXT, value REAL)
+            """)
+            
+            # Create the table for the processed data
+            self.conn.execute("""
+                CREATE TABLE IF NOT EXISTS weather_day(date TEXT PRIMARY KEY, value REAL)
+            """)
 
     def collect_data(self, start_date=None, end_date=None):
         """Collect the raw weather data from NCDC API
@@ -46,8 +43,6 @@ class Weather(DataSource):
         if end_date is None:
             end_date = self.default_end
 
-        cur = self.conn.cursor()
-
         # Maximum return is 1000 entries
         num_days = 1000 // len(self.stations)
         # Maximum date-range is 1 year
@@ -62,19 +57,18 @@ class Weather(DataSource):
                 print("Error querying NCDC API")
                 continue
             
-            for entry in raw_data.get("results", []):
-                # Insert the weather data to the table, to be averaged later
-                day = datetime.datetime.strptime(entry["date"], r"%Y-%m-%dT%H:%M:%S")
-                day = day.strftime(r"%Y-%m-%d %H:%M:%S")
-                val = entry["value"]
+            with self.conn:
+                for entry in raw_data.get("results", []):
+                    # Insert the weather data to the table, to be averaged later
+                    day = datetime.datetime.strptime(entry["date"], r"%Y-%m-%dT%H:%M:%S")
+                    day = day.strftime(r"%Y-%m-%d %H:%M:%S")
+                    val = entry["value"]
 
-                cur.execute("""
-                    INSERT INTO weather_raw(time, value) VALUES(?,?)
-                """, (day, val))
+                    self.conn.execute("""
+                        INSERT INTO weather_raw(time, value) VALUES(?,?)
+                    """, (day, val))
 
-                print("WEATHER:", day, "--", val)
-
-            self.conn.commit()
+                    print("WEATHER:", day, "--", val)
 
     def query_api(self, start_date, end_date):
         """Query the NCDC API for average daily temperature data
@@ -119,14 +113,11 @@ class Weather(DataSource):
             return None
 
     def process_data(self):
-        cur = self.conn.cursor()
-
-        cur.execute("""
-            INSERT OR IGNORE INTO weather_day
-            SELECT
-                DATE(time) as realday,
-                AVG(value)
-            FROM weather_raw GROUP BY realday
-        """)
-
-        self.conn.commit()
+        with self.conn:
+            self.conn.execute("""
+                INSERT OR IGNORE INTO weather_day
+                SELECT
+                    DATE(time) as realday,
+                    AVG(value)
+                FROM weather_raw GROUP BY realday
+            """)

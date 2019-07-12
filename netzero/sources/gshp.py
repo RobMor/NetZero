@@ -22,19 +22,16 @@ class Gshp(DataSource):
 
         self.conn = conn
 
-        cursor = self.conn.cursor()
-
-        # Create the table for the raw data
-        cursor.execute("""
-            CREATE TABLE IF NOT EXISTS gshp_raw(time TIMESTAMP PRIMARY KEY, value REAL)
-        """)
-        
-        # Create the table for the processed data
-        cursor.execute("""
-            CREATE TABLE IF NOT EXISTS gshp_day(date TIMESTAMP PRIMARY KEY, value REAL)
-        """)
-
-        self.conn.commit()
+        with self.conn:
+            # Create the table for the raw data
+            cursor.execute("""
+                CREATE TABLE IF NOT EXISTS gshp_raw(time TIMESTAMP PRIMARY KEY, value REAL)
+            """)
+            
+            # Create the table for the processed data
+            cursor.execute("""
+                CREATE TABLE IF NOT EXISTS gshp_day(date TIMESTAMP PRIMARY KEY, value REAL)
+            """)
 
     def collect_data(self, start_date=None, end_date=None):
         """Collects raw furnace usage data from the Symphony website.
@@ -157,22 +154,20 @@ class Gshp(DataSource):
         the amount of power it was using, and then sum this inervals up over the day
         to get the entire power usage for the day.
         """
+        # Utilize sqlites custom aggregation functions
+        self.conn.create_aggregate("WATTHOURS", 2, WattHourAgg)
+
         with self.conn:
-            self.conn.execute("DELETE FROM gshp_day")
-
-            # Utilize sqlites custom aggregation functions
-            self.conn.create_aggregate("WATTHOURS", 2, WattHourAgg)
-
             # Make sure to sort, and THEN group by the day.
             # The aggregation function depends on the data being sorted to work properly
             self.conn.execute("""
-            INSERT OR IGNORE INTO gshp_day
-            SELECT 
-                DATE(time, 'unixepoch') AS day,
-                WATTHOURS(time, value)
-            FROM 
-                (SELECT time, value from gshp_raw ORDER BY time) AS sorted
-            GROUP BY day
+                INSERT OR IGNORE INTO gshp_day
+                SELECT 
+                    DATE(time, 'unixepoch') AS day,
+                    WATTHOURS(time, value)
+                FROM 
+                    (SELECT time, value from gshp_raw ORDER BY time) AS sorted
+                GROUP BY day
             """)
 
 

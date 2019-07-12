@@ -68,19 +68,16 @@ class Pepco(DataSource):
 
         self.conn = conn
 
-        cursor = self.conn.cursor()
-
-        # Create the table for the raw data
-        cursor.execute("""
-            CREATE TABLE IF NOT EXISTS pepco_raw(time TEXT PRIMARY KEY, value REAL)
-        """)
-        
-        # Create the table for the processed data
-        cursor.execute("""
-            CREATE TABLE IF NOT EXISTS pepco_day(date TEXT PRIMARY KEY, value REAL)
-        """)
-
-        self.conn.commit()
+        with self.conn:
+            # Create the table for the raw data
+            self.conn.execute("""
+                CREATE TABLE IF NOT EXISTS pepco_raw(time TEXT PRIMARY KEY, value REAL)
+            """)
+            
+            # Create the table for the processed data
+            self.conn.execute("""
+                CREATE TABLE IF NOT EXISTS pepco_day(date TEXT PRIMARY KEY, value REAL)
+            """)
 
     def collect_data(self, start_date=None, end_date=None) -> None:
         """Collects data from PEPCO XML files.
@@ -95,8 +92,6 @@ class Pepco(DataSource):
         end : datetime.datetime, optional
             The end of the data collection range
         """
-        cursor = self.conn.cursor()
-
         # Combine files into one long list of entries.
         entries = self.concatenate_files(self.files)
 
@@ -110,22 +105,21 @@ class Pepco(DataSource):
 
             # Only care about entries with IntervalBlock tags
             if block is not None:
-                # Iterate through the readings, storing each one in the database
-                for reading in block.findall(tags["IntervalReading"]):
-                    # Read start time and usage in Wh from XML file
-                    start = int(reading.find(tags["timePeriod"]).find(tags["start"]).text)
-                    start = datetime.datetime.fromtimestamp(start).strftime(r"%Y-%m-%d %H:%M:%S")
-                    value = int(reading.find(tags["value"]).text)
+                with self.conn:
+                    # Iterate through the readings, storing each one in the database
+                    for reading in block.findall(tags["IntervalReading"]):
+                        # Read start time and usage in Wh from XML file
+                        start = int(reading.find(tags["timePeriod"]).find(tags["start"]).text)
+                        start = datetime.datetime.fromtimestamp(start).strftime(r"%Y-%m-%d %H:%M:%S")
 
-                    cursor.execute("""
-                        INSERT OR IGNORE INTO pepco_raw(time, value) 
-                        VALUES(?,?)
-                    """, (start, value))
+                        value = int(reading.find(tags["value"]).text)
 
-                    print("PEPCO:", start, "--", value)
+                        self.conn.execute("""
+                            INSERT OR IGNORE INTO pepco_raw(time, value) 
+                            VALUES(?,?)
+                        """, (start, value))
 
-        # Commit the data to the database
-        self.conn.commit()
+                        print("PEPCO:", start, "--", value)
 
     def concatenate_files(self, files):
         """
@@ -156,18 +150,11 @@ class Pepco(DataSource):
         end : datetime.datetime.DateTime, optional
             The end of the data collection range
         """
-        cursor = self.conn.cursor()
-
-        # Developers note, these dates are in EST already so we can just directly
-        # convert them
-        cursor.execute("""
-            INSERT OR IGNORE INTO pepco_day 
-            SELECT 
-                DATE(time) AS day,
-                SUM(value) / 1000.0
-            FROM pepco_raw GROUP BY day
-        """)
-
-        self.conn.commit()
-
-
+        with self.conn:
+            self.conn.execute("""
+                INSERT OR IGNORE INTO pepco_day 
+                SELECT 
+                    DATE(time) AS day,
+                    SUM(value) / 1000.0
+                FROM pepco_raw GROUP BY day
+            """)
