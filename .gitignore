@@ -1,4 +1,7 @@
+.vscode/
+
 __pycache__/
+venv/
 
 # Ignore personal configurations
 options.json
@@ -6,3 +9,6 @@ options.json
 # Ignore database files
 *.db
 *.sqlite3
+
+# Ignore test data files
+*.xml
