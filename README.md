@@ -41,3 +41,4 @@ Say you wanted to collect Pepco, SolarEdge, and Weather data. First you
 ## TODO
 
 * Timezones
+* Deal with missing GSHP data
