@@ -1,175 +1,132 @@
-import sqlite3, datetime, requests, progressbar
+import sqlite3, datetime, requests
+
+from netzero.sources.base import DataSource
+from netzero.sources import util
 
 
-def get_data(conn, api_token, 
-             start_date=datetime.datetime(2014, 1, 1),
-             end_date=datetime.datetime.today()):
-    """
-    Handles weather data mining.
-    """
-    cur = conn.cursor()
+class Weather(DataSource):
+    default_start = datetime.datetime(2014, 1, 1)
+    default_end = datetime.datetime.today()
 
-    # Make sure that the weather_raw table is already in the database
-    cur.execute("""SELECT name FROM sqlite_master 
-    WHERE type='table' and name='weather_raw'""")
-    if not cur.fetchall(): # Table isn't in database
-        # Day is not primary key because we average across 3 different stations
-        cur.execute("""
-        CREATE TABLE weather_raw(
-            day TEXT,
-            value INTEGER
-        )""")
-        conn.commit()
+    def __init__(self, config, conn):
+        super().validate_config(config, entry="weather", fields=["api_key", "stations"])
 
-    # Make sure that the solar_raw table is already in the database
-    cur.execute("""SELECT name FROM sqlite_master 
-    WHERE type='table' and name='weather_day'""")
-    if not cur.fetchall(): # Table isn't in database
-        cur.execute("""
-        CREATE TABLE weather_day(
-            day TEXT PRIMARY KEY,
-            value INTEGER
-        )""")
-        conn.commit()
+        self.api_key = config["weather"]["api_key"]
+        self.stations = config["weather"]["stations"]
 
-    # Collect the raw weather data from the API
-    store_raw_data(conn, api_token, start_date, end_date)
+        self.conn = conn
 
-    # Consolidate the weather data in to daily averages
-    calculate_daily(conn)
+        cursor = self.conn.cursor()
 
-
-# TODO Request these as user input...
-stations = ["GHCND:USW00093721", "GHCND:USW00093738"]  # Stations: [BWI, Dulles]
-
-def query_api(api_token, start_date, end_date):
-    """
-    Query the NCDC API for average daily temperature data for a given time span
-
-    :param api_token: API Token handed out by NOAA
-    :param start_date: Start of time range to collect data for
-    :param end_date: End of time range to collect data for
-    :returns: A python dict containing the data in the format:
-        {
-            "results":[
-                {
-                    "date":"YYYY-MM-DDTHH:MM:SS",
-                    "value":_
-                }, ...
-            ]
-        }
-    """
-    headers = {
-        "token": api_token
-    }
-    params = {
-        "datasetid": "GHCND",  # Daily weather
-        "stationid": stations, 
-        "datatypeid": "TAVG",  # Average Temperature
-        "units": "standard",  # Fahrenheit
-        "limit": 1000,  # Maximum request size
-        "startdate": start_date.strftime("%Y-%m-%d"),
-        "enddate": end_date.strftime("%Y-%m-%d")
-    }   
-
-    response = requests.get("https://www.ncdc.noaa.gov/cdo-web/api/v2/data", headers=headers, params=params)
-    try:
-        return response.json()
-    except ValueError:
-        print("Error Decoding Weather Data")
-        print(response.text)
-        return {
-            "results": [ 
-                {
-                    "date": "2019-04-09T00:00:00",
-                    "value": 2
-                },
-                {
-                    "date": "2019-04-08T00:00:00",
-                    "value": 2
-                },
-                {
-                    "date": "2019-04-07T00:00:00",
-                    "value": 2
-                }
-            ]
-        }
-
-
-def intervals(num_stations, start_date, end_date):
-    """
-    Compute time intervals so that the API returns less than 1000 entries on each
-
-    :param num_stations: The number of stations being queried
-    :param start_date: The start of the time interval to break up
-    :param end_date: The end of the time interval to break up
-    :returns: A list of tuples, representing the time intervals
-    """
-    days = int(1000/num_stations)
-
-    delta = datetime.timedelta(days=days)
-
-    intervals = []
-    prev = start_date
-    while (prev + delta) < end_date:
-        intervals.append((prev, (prev + delta)))
-        prev = prev + delta
-
-    intervals.append((prev, end_date))
-
-    return intervals
-
-
-widgets = ["Weather: Downloading ", progressbar.SimpleProgress(), progressbar.Bar(), " ", progressbar.ETA()]
-
-def store_raw_data(conn, api_token, start_date, end_date):
-    '''
-    Gets weather data from NOAAs ncdc API service.
-
-    :param api_token: The NCDC API token to use
-    :param start_date: The start of the time frame to collect data on
-    :param end_date: The end of the time frame to collect data on
-    :return: Dict: date -> average temp
-    '''
-    cur = conn.cursor()
-
-    # Generate year long time intervals from start to end date
-    spans = intervals(len(stations), start_date, end_date)
-
-    # Create a visual progressbar
-    bar = progressbar.progressbar(spans, widgets=widgets, redirect_stdout=True)
-
-    for span in bar:
-        # TODO -- REMOVE ASSUMPTION THAT LEN(DATA) < LIMIT
-        raw_data = query_api(api_token, span[0], span[1])
+        # Create the table for the raw data
+        # We collect data from multiple stations for each day so date cant be primary key
+        cursor.execute("""
+            CREATE TABLE IF NOT EXISTS weather_raw(time TEXT, value REAL)
+        """)
         
-        if "results" in raw_data:
-            for entry in raw_data["results"]:
+        # Create the table for the processed data
+        cursor.execute("""
+            CREATE TABLE IF NOT EXISTS weather_day(date TEXT PRIMARY KEY, value REAL)
+        """)
+
+        self.conn.commit()
+
+    def collect_data(self, start_date=None, end_date=None):
+        """Collect the raw weather data from NCDC API
+
+        Parameters
+        ----------
+        start_date: datetime.datetime, optional
+            The start of the time interval to collect data for
+        end_date: datetime.datetime, optional
+            The end of the time interval to collect data for
+        """
+        if start_date is None:
+            start_date = self.default_start
+        if end_date is None:
+            end_date = self.default_end
+
+        cur = self.conn.cursor()
+
+        # Maximum return is 1000 entries
+        num_days = 1000 // len(self.stations)
+        # Maximum date-range is 1 year
+        if num_days > 365:
+            num_days = 365
+
+        for interval in util.time_intervals(start_date, end_date, days=num_days):
+            # TODO -- REMOVE ASSUMPTION THAT LEN(DATA) < LIMIT
+            raw_data = self.query_api(interval[0], interval[1])
+
+            if raw_data is None:
+                print("Error querying NCDC API")
+                continue
+            
+            for entry in raw_data.get("results", []):
                 # Insert the weather data to the table, to be averaged later
-                day = entry["date"]
+                day = datetime.datetime.strptime(entry["date"], r"%Y-%m-%dT%H:%M:%S")
+                day = day.strftime(r"%Y-%m-%d %H:%M:%S")
                 val = entry["value"]
 
-                print(day)
-                print(val)
+                cur.execute("""
+                    INSERT INTO weather_raw(time, value) VALUES(?,?)
+                """, (day, val))
 
-                cur.execute("""INSERT INTO weather_raw(day, value) 
-                    VALUES(?,?)""", (day, val))
+                print("WEATHER:", day, "--", val)
 
-        conn.commit()
+            self.conn.commit()
 
+    def query_api(self, start_date, end_date):
+        """Query the NCDC API for average daily temperature data
 
-def calculate_daily(conn):
-    """
-    Computes average daily temperatures based on the readings of each station.
-    """
-    cur = conn.cursor()
+        Parameters
+        ----------
+        start_date : datetime.datetime, optional
+            Start of time range to collect data for
+        end_date : datetime.datetime, optional
+            End of time range to collect data for
 
-    cur.execute("""
-    INSERT OR IGNORE INTO weather_day
-    SELECT
-        DATE(day) as realday,
-        AVG(value)
-    FROM weather_raw GROUP BY realday
-    """)
+        Returns
+        -------
+        A python dict containing the data in the format:
+            {
+                "results":[
+                    {
+                        "date":"YYYY-MM-DDTHH:MM:SS",
+                        "value":_
+                    }, ...
+                ]
+            }
+        """
+        headers = {
+            "token": self.api_key
+        }
+        params = {
+            "datasetid": "GHCND",  # Daily weather
+            "stationid": self.stations, 
+            "datatypeid": "TAVG",  # Average Temperature
+            "units": "standard",  # Fahrenheit
+            "limit": 1000,  # Maximum request size
+            "startdate": start_date.strftime("%Y-%m-%d"),
+            "enddate": end_date.strftime("%Y-%m-%d")
+        }   
 
-    conn.commit()
+        response = requests.get("https://www.ncdc.noaa.gov/cdo-web/api/v2/data", headers=headers, params=params)
+        if response.ok:
+            return response.json()
+        else:
+            print(response.text)
+            return None
+
+    def process_data(self):
+        cur = self.conn.cursor()
+
+        cur.execute("""
+            INSERT OR IGNORE INTO weather_day
+            SELECT
+                DATE(time) as realday,
+                AVG(value)
+            FROM weather_raw GROUP BY realday
+        """)
+
+        self.conn.commit()
