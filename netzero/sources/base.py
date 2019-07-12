@@ -2,8 +2,8 @@ import abc
 
 
 class DataSource(abc.ABC):
-
-    def __init__(self, config, entry, fields):
+    
+    def validate_config(self, config, entry, fields):
         if entry not in config:
             raise ValueError("'%s' entry not in config" % entry)
 

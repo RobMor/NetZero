@@ -14,13 +14,14 @@ import datetime
 import sqlite3
 
 from netzero.sources.base import DataSource
+from netzero.sources import util
 
 
 class Solar(DataSource):
     default_start = datetime.datetime(2016, 1, 27)
     default_end = datetime.datetime.today()
     def __init__(self, config, conn):
-        super().__init__(config, entry="solar", fields=["api_key", "site_id"])
+        super().validate_config(config, entry="solar", fields=["api_key", "site_id"])
 
         self.api_key = config["solar"]["api_key"]
         self.site_id = config["solar"]["site_id"]
@@ -59,13 +60,10 @@ class Solar(DataSource):
             end_date = self.default_end
 
         cursor = self.conn.cursor()
-    
-        # Create a range of month long intervals
-        intervals = self.create_monthly_intervals(start_date, end_date)
 
         # Iterate through each date range
-        for interval in intervals:
-            result = self.query_api(interval)
+        for interval in util.time_intervals(start_date, end_date, days=30):
+            result = self.query_api(interval[0], interval[1])
 
             for entry in result["energy"]["values"]:
                 # Parse the time from the given string
@@ -80,26 +78,7 @@ class Solar(DataSource):
         
         self.conn.commit()
 
-    def create_monthly_intervals(self, start_date: datetime.datetime, end_date: datetime.datetime):
-        """
-        Computes a list of tuples (datetime, datetime) that represent month long
-        intervals of time to most compactly collect all the solar data we possibly
-        can. The SolarEdge API only offers quarter of an hour granularity on a
-        monthly interval limit.
-        """
-        month = datetime.timedelta(days=30)
-
-        intervals = []
-        prev = start_date
-        while (prev + month) < end_date:
-            intervals.append((prev, prev+month))
-            prev = prev+month
-
-        intervals.append((prev, end_date))
-
-        return intervals
-
-    def query_api(self, interval):
+    def query_api(self, start_date, end_date):
         """A method to query the Solar Edge api for energy data
 
         Parameters
@@ -125,8 +104,8 @@ class Solar(DataSource):
         """
         payload = {
             "api_key": self.api_key,
-            "startDate": interval[0].strftime("%Y-%m-%d"),
-            "endDate": interval[1].strftime("%Y-%m-%d"),
+            "startDate": start_date.strftime("%Y-%m-%d"),
+            "endDate": end_date.strftime("%Y-%m-%d"),
             # Even though we condense this data down to a daily sum we still want to
             # collect as much data as possible because perhaps it may some day be
             # useful. Because of this we do quarter of an hour
@@ -142,11 +121,11 @@ class Solar(DataSource):
         # Developers note, these dates are in EST already so we can just directly
         # convert them
         cursor.execute("""
-        INSERT OR IGNORE INTO solar_day
-        SELECT
-            DATE(time, 'start of day') AS day,
-            SUM(value) / 1000.0
-        FROM solar_raw GROUP BY day
+            INSERT OR IGNORE INTO solar_day
+            SELECT
+                DATE(time, 'start of day') AS day,
+                SUM(value) / 1000.0
+            FROM solar_raw GROUP BY day
         """)
 
         self.conn.commit()

@@ -48,7 +48,7 @@ if __name__ == "__main__":
     sources_group.add_argument("-s", "--solar", help="Collects solar data", dest="sources", action="append_const", const=netzero.sources.Solar)
     sources_group.add_argument("-p", "--pepco", help="Collects pepco data", dest="sources", action="append_const", const=netzero.sources.Pepco)
     # sources_group.add_argument("-g", "--gshp", help="Collects ground source heat pump data", dest="sources", action="append_const", const=netzero.sources.Gshp)
-    # sources_group.add_argument("-w", "--weather", help="Collects weather data", dest="sources", action="append_const", const=netzero.sources.Weather)
+    sources_group.add_argument("-w", "--weather", help="Collects weather data", dest="sources", action="append_const", const=netzero.sources.Weather)
 
     collect_parser.add_argument("-c", required=True, metavar="config", help="Loads inputs from the specified JSON file", dest="config", type=argparse.FileType('r'))
 

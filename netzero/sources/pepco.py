@@ -62,7 +62,7 @@ class Pepco(DataSource):
     default_end = None
 
     def __init__(self, config, conn):
-        super().__init__(config, entry="pepco", fields=["files"])
+        super().validate_config(config, entry="pepco", fields=["files"])
 
         self.files = config["pepco"]["files"]
 
@@ -82,7 +82,7 @@ class Pepco(DataSource):
 
         self.conn.commit()
 
-    def collect_data(self, start=None, end=None) -> None:
+    def collect_data(self, start_date=None, end_date=None) -> None:
         """Collects data from PEPCO XML files.
 
         Collects the raw energy usage data from Pepco's XML files and stores it
@@ -122,7 +122,7 @@ class Pepco(DataSource):
                         VALUES(?,?)
                     """, (start, value))
 
-                    print(start, "--", value)
+                    print("PEPCO:", start, "--", value)
 
         # Commit the data to the database
         self.conn.commit()
@@ -161,11 +161,11 @@ class Pepco(DataSource):
         # Developers note, these dates are in EST already so we can just directly
         # convert them
         cursor.execute("""
-        INSERT OR IGNORE INTO pepco_day 
-        SELECT 
-            DATE(time) AS day,
-            SUM(value) / 1000.0 
-        FROM pepco_raw GROUP BY day
+            INSERT OR IGNORE INTO pepco_day 
+            SELECT 
+                DATE(time) AS day,
+                SUM(value) / 1000.0
+            FROM pepco_raw GROUP BY day
         """)
 
         self.conn.commit()
