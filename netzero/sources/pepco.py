@@ -71,12 +71,12 @@ class Pepco(DataSource):
         with self.conn:
             # Create the table for the raw data
             self.conn.execute("""
-                CREATE TABLE IF NOT EXISTS pepco_raw(time TEXT PRIMARY KEY, value REAL)
+                CREATE TABLE IF NOT EXISTS pepco_raw(time TIMESTAMP PRIMARY KEY, value REAL)
             """)
             
             # Create the table for the processed data
             self.conn.execute("""
-                CREATE TABLE IF NOT EXISTS pepco_day(date TEXT PRIMARY KEY, value REAL)
+                CREATE TABLE IF NOT EXISTS pepco_day(date TIMESTAMP PRIMARY KEY, value REAL)
             """)
 
     def collect_data(self, start_date=None, end_date=None) -> None:

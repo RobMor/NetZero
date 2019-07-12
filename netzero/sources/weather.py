@@ -20,12 +20,12 @@ class Weather(DataSource):
             # Create the table for the raw data
             # We collect data from multiple stations for each day so date cant be primary key
             self.conn.execute("""
-                CREATE TABLE IF NOT EXISTS weather_raw(time TEXT, value REAL)
+                CREATE TABLE IF NOT EXISTS weather_raw(time TIMESTAMP, value REAL)
             """)
             
             # Create the table for the processed data
             self.conn.execute("""
-                CREATE TABLE IF NOT EXISTS weather_day(date TEXT PRIMARY KEY, value REAL)
+                CREATE TABLE IF NOT EXISTS weather_day(date TIMESTAMP PRIMARY KEY, value REAL)
             """)
 
     def collect_data(self, start_date=None, end_date=None):
