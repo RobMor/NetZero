@@ -38,9 +38,9 @@ class Gshp(DataSource):
 
         Parameters
         ---------
-        start_date : datetime.datetime
+        start_date : datetime.date, optional
             The start of the time interval to collect data for
-        end_date : datetime.datetime
+        end_date : datetime.date, optional
             The end of the time interval to collect data for
         """
         if start_date is None:
@@ -115,7 +115,7 @@ class Gshp(DataSource):
         ----------
         s : requests.Session
             Active session (from establish_session)
-        date : datetime.datetime
+        date : datetime.date
             Date to get the data for
         
         Returns

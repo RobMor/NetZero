@@ -52,8 +52,8 @@ if __name__ == "__main__":
 
     collect_parser.add_argument("-c", required=True, metavar="config", help="Loads inputs from the specified JSON file", dest="config", type=argparse.FileType('r'))
 
-    collect_parser.add_argument("-b", "--begin", metavar="YYYY-MM-DD", help="Start date for date range", dest="begin", type=datetime.datetime.fromisoformat)
-    collect_parser.add_argument("-e", "--end", metavar="YYYY-MM-DD", help="End date for date range", dest="end", type=datetime.datetime.fromisoformat)
+    collect_parser.add_argument("-b", "--begin", metavar="YYYY-MM-DD", help="Start date for date range", dest="begin", type=datetime.date.fromisoformat)
+    collect_parser.add_argument("-e", "--end", metavar="YYYY-MM-DD", help="End date for date range", dest="end", type=datetime.date.fromisoformat)
 
     collect_parser.add_argument("database")
 

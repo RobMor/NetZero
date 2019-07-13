@@ -46,9 +46,9 @@ class Solar(DataSource):
         
         Parameters
         ----------
-        start : datetime.datetime
+        start : datetime.date, optional
             The end of the time interval to collect data from
-        end : datetime.datetime
+        end : datetime.date, optional
             The end of the time interval to collect data from
         """
         if start_date is None:
@@ -77,8 +77,10 @@ class Solar(DataSource):
 
         Parameters
         ----------
-        span : Tuple[datetime.datetime, datetime.datetime]
-            The span of time to query the API for (must be less than a month)
+        start_date : datetime.date
+            The start of the time interval to query the api for
+        end_date : datetime.date
+            The end of the time interval to query the api for
 
         Returns
         -------
@@ -113,7 +115,7 @@ class Solar(DataSource):
         with self.conn:
             # Developers note, these dates are in EST already so we can just directly
             # convert them
-            cursor.execute("""
+            self.conn.execute("""
                 INSERT OR IGNORE INTO solar_day
                 SELECT
                     DATE(time, 'start of day') AS day,

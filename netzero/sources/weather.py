@@ -1,4 +1,6 @@
-import sqlite3, datetime, requests
+import sqlite3
+import datetime
+import requests
 
 from netzero.sources.base import DataSource
 from netzero.sources import util
@@ -33,9 +35,9 @@ class Weather(DataSource):
 
         Parameters
         ----------
-        start_date: datetime.datetime, optional
+        start_date: datetime.date, optional
             The start of the time interval to collect data for
-        end_date: datetime.datetime, optional
+        end_date: datetime.date, optional
             The end of the time interval to collect data for
         """
         if start_date is None:
@@ -74,9 +76,9 @@ class Weather(DataSource):
 
         Parameters
         ----------
-        start_date : datetime.datetime, optional
+        start_date : datetime.date
             Start of time range to collect data for
-        end_date : datetime.datetime, optional
+        end_date : datetime.date
             End of time range to collect data for
 
         Returns

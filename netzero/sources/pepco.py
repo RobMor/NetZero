@@ -87,9 +87,9 @@ class Pepco(DataSource):
 
         Parameters
         ----------
-        start : datetime.datetime, optional
+        start : datetime.date, optional
             The start of the data collection range
-        end : datetime.datetime, optional
+        end : datetime.date, optional
             The end of the data collection range
         """
         # Combine files into one long list of entries.
