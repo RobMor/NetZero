@@ -1,8 +1,27 @@
-from setuptools import setup
+"""NetZero Data Collection Tool
 
-setup(name='NetZeroData',
-      version='1.0',
-      description='A collection of tools to mine data on the efficiency of a house',
-      author='Robert Morrison',
-      author_email='robbieguy98@gmail.com',
-      install_requires=["pandas","requests","progressbar2","beautifulsoup4"])
+"""
+from setuptools import find_packages, setup
+
+dependencies = ["requests", "bs4"]
+
+setup(name="netzero",
+      version="0.1.0",
+      author="Robert Morrison",
+      author_email="robbieguy98@gmail.com",
+      description=
+      "A collection of tools to mine data on the efficiency of a house",
+      long_description=__doc__,
+
+      url="https://github.com/RobMor/NetZero",
+
+      packages=["netzero", "netzero.sources"],
+
+      install_requires=["requests", "bs4"],
+
+      entry_points = {
+            "console_scripts": [
+                  "netzero=netzero.__main__:main"
+            ]
+      },
+)
