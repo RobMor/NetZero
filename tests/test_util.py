@@ -52,7 +52,7 @@ class TestSourceUtils(unittest.TestCase):
             self.assertEqual(expected[0], actual[0])
             self.assertEqual(expected[1], actual[1])
 
-    def test_time_intervals_empty(self):
+    def test_time_intervals_same(self):
         start_date = datetime.datetime(2019, 7, 12)
         end_date = datetime.datetime(2019, 7, 12)
 

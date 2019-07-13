@@ -22,7 +22,12 @@ class Weather(DataSource):
             # Create the table for the raw data
             # We collect data from multiple stations for each day so date cant be primary key
             self.conn.execute("""
-                CREATE TABLE IF NOT EXISTS weather_raw(time TIMESTAMP, value REAL)
+                CREATE TABLE IF NOT EXISTS weather_raw (
+                    time TIMESTAMP, 
+                    value REAL,
+                    station TEXT,
+                    PRIMARY KEY (time, station)
+                )
             """)
             
             # Create the table for the processed data
@@ -62,14 +67,16 @@ class Weather(DataSource):
             with self.conn:
                 for entry in raw_data.get("results", []):
                     # Insert the weather data to the table, to be averaged later
-                    day = datetime.datetime.fromisoformat(entry["date"])
-                    val = entry["value"]
+                    date = datetime.datetime.fromisoformat(entry["date"])
+                    value = entry["value"]
+                    station = entry["station"]
 
                     self.conn.execute("""
-                        INSERT INTO weather_raw(time, value) VALUES(?,?)
-                    """, (day, val))
+                        INSERT OR IGNORE INTO weather_raw (time, value, station) 
+                        VALUES (?, ?, ?)
+                    """, (date, value, station))
 
-                    print("WEATHER:", day, "--", val)
+                    print("WEATHER:", date, "--", value, ">", station)
 
     def query_api(self, start_date, end_date):
         """Query the NCDC API for average daily temperature data
