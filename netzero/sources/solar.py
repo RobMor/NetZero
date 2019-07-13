@@ -36,7 +36,7 @@ class Solar(DataSource):
             
             # Create the table for the processed data
             self.conn.execute("""
-                CREATE TABLE IF NOT EXISTS solar_day(date TIMESTAMP PRIMARY KEY, value REAL)
+                CREATE TABLE IF NOT EXISTS solar_day(date DATE PRIMARY KEY, value REAL)
             """)
 
     def collect_data(self, start_date=None, end_date=None):
