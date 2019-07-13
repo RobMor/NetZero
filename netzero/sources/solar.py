@@ -20,8 +20,11 @@ from netzero.sources import util
 class Solar(DataSource):
     default_start = datetime.datetime(2016, 1, 27)
     default_end = datetime.datetime.today()
+
     def __init__(self, config, conn):
-        super().validate_config(config, entry="solar", fields=["api_key", "site_id"])
+        super().validate_config(config,
+                                entry="solar",
+                                fields=["api_key", "site_id"])
 
         self.api_key = config["solar"]["api_key"]
         self.site_id = config["solar"]["site_id"]
@@ -33,7 +36,7 @@ class Solar(DataSource):
             self.conn.execute("""
                 CREATE TABLE IF NOT EXISTS solar_raw(time TIMESTAMP PRIMARY KEY, value REAL)
             """)
-            
+
             # Create the table for the processed data
             self.conn.execute("""
                 CREATE TABLE IF NOT EXISTS solar_day(date DATE PRIMARY KEY, value REAL)
@@ -66,7 +69,8 @@ class Solar(DataSource):
                     date = datetime.datetime.fromisoformat(entry["date"])
                     value = entry["value"] or 0  # 0 if None
 
-                    self.conn.execute("""
+                    self.conn.execute(
+                        """
                         INSERT OR IGNORE INTO solar_raw(time, value) VALUES(?,?)
                     """, (date, value))
 
@@ -107,7 +111,9 @@ class Solar(DataSource):
             # useful. Because of this we do quarter of an hour
             "timeUnit": "QUARTER_OF_AN_HOUR"
         }
-        data = requests.get("https://monitoringapi.solaredge.com/site/"+self.site_id+"/energy.json", params=payload)
+        data = requests.get("https://monitoringapi.solaredge.com/site/" +
+                            self.site_id + "/energy.json",
+                            params=payload)
         return json.loads(data.text)
 
     def process_data(self):

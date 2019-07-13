@@ -43,7 +43,6 @@ import xml.etree.ElementTree as ETree
 
 from netzero.sources.base import DataSource
 
-
 tags = {
     "entry": "{http://www.w3.org/2005/Atom}entry",
     "title": "{http://www.w3.org/2005/Atom}title",
@@ -73,7 +72,7 @@ class Pepco(DataSource):
             self.conn.execute("""
                 CREATE TABLE IF NOT EXISTS pepco_raw(time TIMESTAMP PRIMARY KEY, value REAL)
             """)
-            
+
             # Create the table for the processed data
             self.conn.execute("""
                 CREATE TABLE IF NOT EXISTS pepco_day(date DATE PRIMARY KEY, value REAL)
@@ -109,12 +108,15 @@ class Pepco(DataSource):
                     # Iterate through the readings, storing each one in the database
                     for reading in block.findall(tags["IntervalReading"]):
                         # Read start time and usage in Wh from XML file
-                        start = int(reading.find(tags["timePeriod"]).find(tags["start"]).text)
+                        start = int(
+                            reading.find(tags["timePeriod"]).find(
+                                tags["start"]).text)
                         start = datetime.datetime.fromtimestamp(start)
 
                         value = int(reading.find(tags["value"]).text)
 
-                        self.conn.execute("""
+                        self.conn.execute(
+                            """
                             INSERT OR IGNORE INTO pepco_raw(time, value) 
                             VALUES(?,?)
                         """, (start, value))

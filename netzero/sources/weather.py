@@ -11,7 +11,9 @@ class Weather(DataSource):
     default_end = datetime.datetime.today()
 
     def __init__(self, config, conn):
-        super().validate_config(config, entry="weather", fields=["api_key", "stations"])
+        super().validate_config(config,
+                                entry="weather",
+                                fields=["api_key", "stations"])
 
         self.api_key = config["weather"]["api_key"]
         self.stations = config["weather"]["stations"]
@@ -29,7 +31,7 @@ class Weather(DataSource):
                     PRIMARY KEY (time, station)
                 )
             """)
-            
+
             # Create the table for the processed data
             self.conn.execute("""
                 CREATE TABLE IF NOT EXISTS weather_day(date DATE PRIMARY KEY, value REAL)
@@ -56,14 +58,16 @@ class Weather(DataSource):
         if num_days > 365:
             num_days = 365
 
-        for interval in util.time_intervals(start_date, end_date, days=num_days):
+        for interval in util.time_intervals(start_date,
+                                            end_date,
+                                            days=num_days):
             # TODO -- REMOVE ASSUMPTION THAT LEN(DATA) < LIMIT
             raw_data = self.query_api(interval[0], interval[1])
 
             if raw_data is None:
                 print("Error querying NCDC API")
                 continue
-            
+
             with self.conn:
                 for entry in raw_data.get("results", []):
                     # Insert the weather data to the table, to be averaged later
@@ -71,7 +75,8 @@ class Weather(DataSource):
                     value = entry["value"]
                     station = entry["station"]
 
-                    self.conn.execute("""
+                    self.conn.execute(
+                        """
                         INSERT OR IGNORE INTO weather_raw (time, value, station) 
                         VALUES (?, ?, ?)
                     """, (date, value, station))
@@ -100,20 +105,21 @@ class Weather(DataSource):
                 ]
             }
         """
-        headers = {
-            "token": self.api_key
-        }
+        headers = {"token": self.api_key}
         params = {
             "datasetid": "GHCND",  # Daily weather
-            "stationid": self.stations, 
+            "stationid": self.stations,
             "datatypeid": "TAVG",  # Average Temperature
             "units": "standard",  # Fahrenheit
             "limit": 1000,  # Maximum request size
             "startdate": start_date.strftime("%Y-%m-%d"),
             "enddate": end_date.strftime("%Y-%m-%d")
-        }   
+        }
 
-        response = requests.get("https://www.ncdc.noaa.gov/cdo-web/api/v2/data", headers=headers, params=params)
+        response = requests.get(
+            "https://www.ncdc.noaa.gov/cdo-web/api/v2/data",
+            headers=headers,
+            params=params)
         if response.ok:
             return response.json()
         else:

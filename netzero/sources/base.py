@@ -2,14 +2,14 @@ import abc
 
 
 class DataSource(abc.ABC):
-    
     def validate_config(self, config, entry, fields):
         if entry not in config:
             raise ValueError("'%s' entry not in config" % entry)
 
         for field in fields:
             if field not in config[entry]:
-                raise ValueError("'%s' field not in '%s' entry" % (field, entry))
+                raise ValueError("'%s' field not in '%s' entry" %
+                                 (field, entry))
 
     @abc.abstractmethod
     def collect_data(self, start=None, end=None):
@@ -18,7 +18,7 @@ class DataSource(abc.ABC):
     @abc.abstractmethod
     def process_data(self):
         pass
-    
+
     @property
     @abc.abstractproperty
     def default_start(self):

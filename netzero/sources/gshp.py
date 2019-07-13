@@ -15,7 +15,9 @@ class Gshp(DataSource):
     default_end = datetime.datetime.today()
 
     def __init__(self, config, conn):
-        super().validate_config(config, entry="gshp", fields=["username", "password"])
+        super().validate_config(config,
+                                entry="gshp",
+                                fields=["username", "password"])
 
         self.username = config["gshp"]["username"]
         self.password = config["gshp"]["password"]
@@ -27,7 +29,7 @@ class Gshp(DataSource):
             self.conn.execute("""
                 CREATE TABLE IF NOT EXISTS gshp_raw(time TIMESTAMP PRIMARY KEY, value REAL)
             """)
-            
+
             # Create the table for the processed data
             self.conn.execute("""
                 CREATE TABLE IF NOT EXISTS gshp_day(date DATE PRIMARY KEY, value REAL)
@@ -61,9 +63,11 @@ class Gshp(DataSource):
                     time = int(row["1"])  # Unix timestamp
                     time = datetime.datetime.fromtimestamp(time)
 
-                    value = int(row["78"])  # The number of Watts used in the time frame
+                    value = int(row["78"]
+                                )  # The number of Watts used in the time frame
 
-                    self.conn.execute("""
+                    self.conn.execute(
+                        """
                         INSERT OR IGNORE INTO gshp_raw(time, value) VALUES(?,?)
                     """, (time, value))
 
@@ -95,16 +99,19 @@ class Gshp(DataSource):
 
         # Login to the site
         p = s.post("https://symphony.mywaterfurnace.com/account/login",
-            data=payload)
+                   data=payload)
 
         # Find the tokens that seem to be necessary for the next few steps
         soup = bs4.BeautifulSoup(p.text, "html.parser")
-        field = soup.find("a", attrs={"title": "AWL Tech View"}).attrs["href"][1:] # Get everything except the /
+        field = soup.find("a", attrs={
+            "title": "AWL Tech View"
+        }).attrs["href"][1:]  # Get everything except the /
 
         # Navigate some more
         # Navigating here allows us to actually collect the data.
         # Necessary in order the query the fetch.php script.
-        s.get("https://symphony.mywaterfurnace.com/dealer/historical-data" + field)
+        s.get("https://symphony.mywaterfurnace.com/dealer/historical-data" +
+              field)
 
         return s
 
@@ -132,15 +139,12 @@ class Gshp(DataSource):
             ]
         Every value in the JSON objects is a string
         """
-        params = {
-            "json": '',
-            "date": date.strftime("%m-%d-%Y")
-        }
+        params = {"json": '', "date": date.strftime("%m-%d-%Y")}
         # Putting the date you want information for after this url returns some
         # json containing all the data for that day.
         # Found with some simple network analysis using browser tools...
         response = session.get("https://symphony.mywaterfurnace.com/fetch.php",
-            params=params)
+                               params=params)
 
         if response.ok:
             return response.json()
@@ -195,9 +199,9 @@ class WattHourAgg:
         time = datetime.datetime.fromisoformat(time)
         kw = value / 1000
 
-        if self.prev_time: # Compute time since previous entry
+        if self.prev_time:  # Compute time since previous entry
             h = (time - self.prev_time).total_seconds() / 3600
-        else: # Compute time since start of day
+        else:  # Compute time since start of day
             midnight = time.replace(hour=0, minute=0, second=0)
             h = (time - midnight).total_seconds() / 3600
 
