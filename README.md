@@ -60,22 +60,22 @@ our data, we will tell `netzero` to create one called `netzero.db`. Okay, to
 collect our data we can run this command:
 
 ```console
-$ python -m netzero collect +psw --start=2019-08-01 -c config.json netzero.db
+$ netzero collect +psw --start=2019-08-01 -c config.json netzero.db
 ```
 
 Lets break this command down:
 
-`netzero collect` tells netzero that we want to **collect** data.
+* `netzero collect`: tells netzero that we are **collecting** data with this command.
 
-`+psw` adds Pepco (`p`), Solar (`s`) and Weather (`w`) data to the list of
+* `+psw`: adds Pepco (`p`), Solar (`s`) and Weather (`w`) data to the list of
 sources to collect from (You can get a full list of sources from `netzero collect -h`).
 
-`--start=2019-08-01` tells `netzero` to only collect data after August 1st 2019.
+* `--start=2019-08-01`: tells `netzero` to only collect data after August 1st 2019.
 The date must follow the format `YYYY-MM-DD`.
 
-`-c config.json` specifies the file name of our configuration file.
+* `-c config.json`: specifies the file name of our configuration file.
 
-`netzero.db` gives the filename of our database.
+* `netzero.db`: gives the filename of our database.
 
 For more options you can check out the help information using `-h`.
 
