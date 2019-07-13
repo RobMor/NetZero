@@ -150,11 +150,10 @@ class Pepco(DataSource):
         end : datetime.datetime.DateTime, optional
             The end of the data collection range
         """
-        with self.conn:
-            self.conn.execute("""
-                INSERT OR IGNORE INTO pepco_day 
-                SELECT 
-                    DATE(time) AS day,
-                    SUM(value) / 1000.0
-                FROM pepco_raw GROUP BY day
-            """)
+        self.conn.execute("""
+            INSERT OR IGNORE INTO pepco_day 
+            SELECT 
+                DATE(time) AS day,
+                SUM(value) / 1000.0
+            FROM pepco_raw GROUP BY day
+        """)

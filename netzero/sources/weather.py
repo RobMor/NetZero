@@ -114,11 +114,10 @@ class Weather(DataSource):
             return None
 
     def process_data(self):
-        with self.conn:
-            self.conn.execute("""
-                INSERT OR IGNORE INTO weather_day
-                SELECT
-                    DATE(time) as realday,
-                    AVG(value)
-                FROM weather_raw GROUP BY realday
-            """)
+        self.conn.execute("""
+            INSERT OR IGNORE INTO weather_day
+            SELECT
+                DATE(time) as realday,
+                AVG(value)
+            FROM weather_raw GROUP BY realday
+        """)

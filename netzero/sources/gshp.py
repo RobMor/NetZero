@@ -24,12 +24,12 @@ class Gshp(DataSource):
 
         with self.conn:
             # Create the table for the raw data
-            cursor.execute("""
+            self.conn.execute("""
                 CREATE TABLE IF NOT EXISTS gshp_raw(time TIMESTAMP PRIMARY KEY, value REAL)
             """)
             
             # Create the table for the processed data
-            cursor.execute("""
+            self.conn.execute("""
                 CREATE TABLE IF NOT EXISTS gshp_day(date DATE PRIMARY KEY, value REAL)
             """)
 
@@ -157,18 +157,17 @@ class Gshp(DataSource):
         # Utilize sqlites custom aggregation functions
         self.conn.create_aggregate("WATTHOURS", 2, WattHourAgg)
 
-        with self.conn:
-            # Make sure to sort, and THEN group by the day.
-            # The aggregation function depends on the data being sorted to work properly
-            self.conn.execute("""
-                INSERT OR IGNORE INTO gshp_day
-                SELECT 
-                    DATE(time, 'unixepoch') AS day,
-                    WATTHOURS(time, value)
-                FROM 
-                    (SELECT time, value from gshp_raw ORDER BY time) AS sorted
-                GROUP BY day
-            """)
+        # Make sure to sort, and THEN group by the day.
+        # The aggregation function depends on the data being sorted to work properly
+        self.conn.execute("""
+            INSERT OR IGNORE INTO gshp_day
+            SELECT 
+                DATE(time, 'unixepoch') AS day,
+                WATTHOURS(time, value)
+            FROM 
+                (SELECT time, value from gshp_raw ORDER BY time) AS sorted
+            GROUP BY day
+        """)
 
 
 ### TODO -- Deal with missing data. Hours at a time may be unaccounted for!!!

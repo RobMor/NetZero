@@ -112,13 +112,12 @@ class Solar(DataSource):
 
     def process_data(self):
         """Computes the daily input of the solar panels in kWh."""
-        with self.conn:
-            # Developers note, these dates are in EST already so we can just directly
-            # convert them
-            self.conn.execute("""
-                INSERT OR IGNORE INTO solar_day
-                SELECT
-                    DATE(time, 'start of day') AS day,
-                    SUM(value) / 1000.0
-                FROM solar_raw GROUP BY day
-            """)
+        # Developers note, these dates are in EST already so we can just directly
+        # convert them
+        self.conn.execute("""
+            INSERT OR IGNORE INTO solar_day
+            SELECT
+                DATE(time, 'start of day') AS day,
+                SUM(value) / 1000.0
+            FROM solar_raw GROUP BY day
+        """)
