@@ -110,7 +110,7 @@ class Pepco(DataSource):
                     for reading in block.findall(tags["IntervalReading"]):
                         # Read start time and usage in Wh from XML file
                         start = int(reading.find(tags["timePeriod"]).find(tags["start"]).text)
-                        start = datetime.datetime.fromtimestamp(start).strftime(r"%Y-%m-%d %H:%M:%S")
+                        start = datetime.datetime.fromtimestamp(start)
 
                         value = int(reading.find(tags["value"]).text)
 

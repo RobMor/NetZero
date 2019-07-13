@@ -60,8 +60,7 @@ class Weather(DataSource):
             with self.conn:
                 for entry in raw_data.get("results", []):
                     # Insert the weather data to the table, to be averaged later
-                    day = datetime.datetime.strptime(entry["date"], r"%Y-%m-%dT%H:%M:%S")
-                    day = day.strftime(r"%Y-%m-%d %H:%M:%S")
+                    day = datetime.datetime.fromisoformat(entry["date"])
                     val = entry["value"]
 
                     self.conn.execute("""

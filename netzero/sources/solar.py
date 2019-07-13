@@ -63,7 +63,7 @@ class Solar(DataSource):
             with self.conn:
                 for entry in result["energy"]["values"]:
                     # Parse the time from the given string
-                    date = entry["date"]
+                    date = datetime.datetime.fromisoformat(entry["date"])
                     value = entry["value"] or 0  # 0 if None
 
                     self.conn.execute("""
