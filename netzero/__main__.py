@@ -32,8 +32,7 @@ def format_data(arguments):
     print("format", arguments)
 
 
-# TODO -- ADD Defaults Option (--defaults allows you to use all the default options)
-if __name__ == "__main__":
+def main():
     import argparse
 
     program_name = "netzero"
@@ -120,3 +119,8 @@ if __name__ == "__main__":
         arguments.func(arguments)
     else:
         parser.print_help()
+
+
+# TODO -- ADD Defaults Option (--defaults allows you to use all the default options)
+if __name__ == "__main__":
+    main()

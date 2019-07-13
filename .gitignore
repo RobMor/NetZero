@@ -2,6 +2,7 @@
 
 __pycache__/
 venv/
+*.egg-info
 
 # Ignore personal configurations
 options.json
