@@ -3,6 +3,7 @@ import unittest
 import unittest.mock
 import datetime
 import itertools
+import configparser
 
 from netzero.sources import Weather
 
@@ -24,12 +25,13 @@ fake_results = {
 
 class TestWeatherSource(unittest.TestCase):
     def setUp(self):
-        self.config = {
-            "weather": {
-                "api_key": "fake",
-                "stations": ["fake1", "fake2"]
-            }
+        self.config = configparser.ConfigParser()
+        self.config["weather"] = {
+            "api_key": "fake",
+            "stations": '["fake1", "fake2"]'
         }
+        print(self.config)
+        print(self.config["weather"])
         self.conn = sqlite3.connect(":memory:",
                                     detect_types=sqlite3.PARSE_DECLTYPES)
 
@@ -88,9 +90,9 @@ class TestWeatherSource(unittest.TestCase):
                                 "query_api",
                                 return_value=fake_results)
     def test_weather_collect_max_range(self, mock_query):
-        # Three sources to get 1000 results in 333.33 days, which is less than
+        # Three stations to get 1000 results in 333.33 days, which is less than
         # a year
-        self.config["sources"] = ["fake1", "fake2", "fake3"]
+        self.config["weather"]["stations"] = '["fake1", "fake2", "fake3"]'
 
         start_date = datetime.date(2016, 1, 1)
         end_date = start_date + datetime.timedelta(days=333)
@@ -110,7 +112,7 @@ class TestWeatherSource(unittest.TestCase):
                                 "query_api",
                                 return_value=fake_results)
     def test_weather_collect_multiple_intervals(self, mock_query):
-        self.config["source"] = ["fake1"]
+        self.config["weather"]["stations"] = '["fake1"]'
 
         start_date = datetime.date(2016, 1, 1)
         end_date = start_date + datetime.timedelta(
