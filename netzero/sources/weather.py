@@ -1,6 +1,7 @@
 import sqlite3
 import datetime
 import requests
+import json
 
 from netzero.sources.base import DataSource
 from netzero.sources import util
@@ -16,7 +17,7 @@ class Weather(DataSource):
                                 fields=["api_key", "stations"])
 
         self.api_key = config["weather"]["api_key"]
-        self.stations = config["weather"]["stations"]
+        self.stations = json.loads(config["weather"]["stations"])
 
         self.conn = conn
 

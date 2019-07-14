@@ -28,7 +28,7 @@ $ pip install git+https://github.com/RobMor/NetZero.git
 These commands will install all dependencies and install `netzero` on your
 machine.
 
-In order to actually use the tool you'll need to set up an `options.json` file.
+In order to actually use the tool you'll need to set up an `config.ini` file.
 A template with instructions is included in this repository.
 
 ## Usage
@@ -55,7 +55,7 @@ available commands:
 
 Say you wanted to collect Pepco, SolarEdge, and Weather data since August 2019.
 First you need to ensure that your configuration file is set up. In this example
-we will call it `config.json`. Also since we don't already have a database for 
+we will call it `config.ini`. Also since we don't already have a database for 
 our data, we will tell `netzero` to create one called `netzero.db`. Okay, to 
 collect our data we can run this command:
 
@@ -73,7 +73,7 @@ sources to collect from (You can get a full list of sources from `netzero collec
 * `--start=2019-08-01`: tells `netzero` to only collect data after August 1st 2019.
 The date must follow the format `YYYY-MM-DD`.
 
-* `-c config.json`: specifies the file name of our configuration file.
+* `-c config.ini`: specifies the file name of our configuration file.
 
 * `netzero.db`: gives the filename of our database.
 
