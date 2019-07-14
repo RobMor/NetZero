@@ -5,7 +5,7 @@ venv/
 *.egg-info
 
 # Ignore personal configurations
-options.json
+options.ini
 
 # Ignore database files
 *.db

@@ -36,6 +36,7 @@ Green Button XML Format for Documentation Purposes:
 </feed>
 """
 
+import json
 import sqlite3
 import datetime
 import itertools
@@ -63,7 +64,7 @@ class Pepco(DataSource):
     def __init__(self, config, conn):
         super().validate_config(config, entry="pepco", fields=["files"])
 
-        self.files = config["pepco"]["files"]
+        self.files = json.loads(config["pepco"]["files"])
 
         self.conn = conn
 
