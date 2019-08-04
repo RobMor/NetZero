@@ -68,14 +68,19 @@ def main(arguments):
     sources = [source(config) for source in sources]
 
     for source in sources:
+        # Create the table
+        query = f"CREATE TABLE IF NOT EXISTS {source.name}{source.columns}"
+        conn.execute(query)
+
+        # Create a list of columns without type annotations
+        columns = tuple(map(lambda x: x.split()[0], source.columns))
+
         # Create a string for sqlite subtitution
         substitutions = "(" + ",".join(["?"] * len(source.columns)) + ")"
 
-        # Create the table
-        query = f"CREATE TABLE IF NOT EXISTS ?{substitutions}"
-        conn.execute(query, (source.name, *source.columns))
+        # Create the query
+        query = f"INSERT OR IGNORE INTO {source.name}{columns} VALUES {substitutions}"
 
-        # Insert the data
-        query = f"INSERT OR IGNORE INTO ?{substitutions} VALUES {substitutions}"
+        # Collect the data
         for row in source.collect_data(arguments.start, arguments.end):
-            conn.execute(query, (source.name, *source.columns, *row))
+            conn.execute(query, row)
