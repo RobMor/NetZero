@@ -8,7 +8,8 @@ from netzero import util
 
 
 class Weather(DataSource):
-    columns = (DataSource.TIME, "value", "station")
+    columns = (DataSource.TIME, "value", "station"
+               )  # TODO allow for primary keys
     summary = "collects weather data"
 
     default_start = datetime.datetime(2014, 1, 1)

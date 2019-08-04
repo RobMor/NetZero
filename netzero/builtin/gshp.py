@@ -19,8 +19,8 @@ class Gshp(DataSource):
 
     def __init__(self, config):
         util.validate_config(config,
-                                entry="gshp",
-                                fields=["username", "password"])
+                             entry="gshp",
+                             fields=["username", "password"])
 
         self.username = config["gshp"]["username"]
         self.password = config["gshp"]["password"]
@@ -141,13 +141,11 @@ class Gshp(DataSource):
         the amount of power it was using, and then sum this inervals up over the day
         to get the entire power usage for the day.
         """
-        return {
-            ("time", "value"): WattHourAgg
-        }
+        return {("time", "value"): WattHourAgg}
 
 
 ### TODO -- Deal with missing data. Hours at a time may be unaccounted for!!!
-class WattHourAgg:
+class WattHourAgg(object):
     """An Sqlite3 aggregator to convert GSHP power usage to energy usage
 
     This class is meant to be fed to sqlite3's create_aggregate method. The 

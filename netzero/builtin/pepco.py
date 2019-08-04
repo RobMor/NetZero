@@ -58,6 +58,9 @@ tags = {
 
 
 class Pepco(DataSource):
+    columns = (DataSource.TIME, "value")  # TODO data types
+    summary = "collects pepco data"
+
     default_start = None
     default_end = None
 
@@ -65,19 +68,6 @@ class Pepco(DataSource):
         super().validate_config(config, entry="pepco", fields=["files"])
 
         self.files = json.loads(config["pepco"]["files"])
-
-        self.conn = conn
-
-        with self.conn:
-            # Create the table for the raw data
-            self.conn.execute("""
-                CREATE TABLE IF NOT EXISTS pepco_raw(time TIMESTAMP PRIMARY KEY, value REAL)
-            """)
-
-            # Create the table for the processed data
-            self.conn.execute("""
-                CREATE TABLE IF NOT EXISTS pepco_day(date DATE PRIMARY KEY, value REAL)
-            """)
 
     def collect_data(self, start_date=None, end_date=None) -> None:
         """Collects data from PEPCO XML files.
@@ -105,24 +95,17 @@ class Pepco(DataSource):
 
             # Only care about entries with IntervalBlock tags
             if block is not None:
-                with self.conn:
-                    # Iterate through the readings, storing each one in the database
-                    for reading in block.findall(tags["IntervalReading"]):
-                        # Read start time and usage in Wh from XML file
-                        start = int(
-                            reading.find(tags["timePeriod"]).find(
-                                tags["start"]).text)
-                        start = datetime.datetime.fromtimestamp(start)
+                # Iterate through the readings, storing each one in the database
+                for reading in block.findall(tags["IntervalReading"]):
+                    # Read start time and usage in Wh from XML file
+                    start = int(
+                        reading.find(tags["timePeriod"]).find(
+                            tags["start"]).text)
+                    start = datetime.datetime.fromtimestamp(start)
 
-                        value = int(reading.find(tags["value"]).text)
+                    value = int(reading.find(tags["value"]).text)
 
-                        self.conn.execute(
-                            """
-                            INSERT OR IGNORE INTO pepco_raw(time, value) 
-                            VALUES(?,?)
-                        """, (start, value))
-
-                        print("PEPCO:", start, "--", value)
+                    yield start, value
 
     def concatenate_files(self, files):
         """
@@ -153,10 +136,15 @@ class Pepco(DataSource):
         end : datetime.datetime.DateTime, optional
             The end of the data collection range
         """
-        self.conn.execute("""
-            INSERT OR IGNORE INTO pepco_day 
-            SELECT 
-                DATE(time) AS day,
-                SUM(value) / 1000.0
-            FROM pepco_raw GROUP BY day
-        """)
+        return {("value",): PepcoAgg}
+
+
+class PepcoAgg(object):
+    def __init__(self):
+        self.sum = 0
+
+    def step(self, value):
+        self.sum += value
+
+    def finalize(self):
+        return self.sum / 1000
