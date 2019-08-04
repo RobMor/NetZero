@@ -13,34 +13,19 @@ import requests
 import datetime
 import sqlite3
 
-from netzero.sources.base import DataSource
-from netzero.sources import util
+from netzero.sources import DataSource
+from netzero.util import util
 
 
 class Solar(DataSource):
     default_start = datetime.datetime(2016, 1, 27)
     default_end = datetime.datetime.today()
 
-    def __init__(self, config, conn):
-        super().validate_config(config,
-                                entry="solar",
-                                fields=["api_key", "site_id"])
+    def __init__(self, config):
+        util.validate_config(config, entry="solar", fields=["api_key", "site_id"])
 
         self.api_key = config["solar"]["api_key"]
         self.site_id = config["solar"]["site_id"]
-
-        self.conn = conn
-
-        with self.conn:
-            # Create the table for the raw data
-            self.conn.execute("""
-                CREATE TABLE IF NOT EXISTS solar_raw(time TIMESTAMP PRIMARY KEY, value REAL)
-            """)
-
-            # Create the table for the processed data
-            self.conn.execute("""
-                CREATE TABLE IF NOT EXISTS solar_day(date DATE PRIMARY KEY, value REAL)
-            """)
 
     def collect_data(self, start_date=None, end_date=None):
         """Collect raw solar data from SolarEdge
@@ -63,18 +48,12 @@ class Solar(DataSource):
         for interval in util.time_intervals(start_date, end_date, days=30):
             result = self.query_api(interval[0], interval[1])
 
-            with self.conn:
-                for entry in result["energy"]["values"]:
-                    # Parse the time from the given string
-                    date = datetime.datetime.fromisoformat(entry["date"])
-                    value = entry["value"] or 0  # 0 if None
+            for entry in result["energy"]["values"]:
+                # Parse the time from the given string
+                date = datetime.datetime.fromisoformat(entry["date"])
+                value = entry["value"] or 0  # 0 if None
 
-                    self.conn.execute(
-                        """
-                        INSERT OR IGNORE INTO solar_raw(time, value) VALUES(?,?)
-                    """, (date, value))
-
-                    print("SOLAR:", date, "--", value)
+                yield date, value
 
     def query_api(self, start_date, end_date):
         """A method to query the Solar Edge api for energy data
@@ -120,10 +99,14 @@ class Solar(DataSource):
         """Computes the daily input of the solar panels in kWh."""
         # Developers note, these dates are in EST already so we can just directly
         # convert them
-        self.conn.execute("""
-            INSERT OR IGNORE INTO solar_day
-            SELECT
-                DATE(time, 'start of day') AS day,
-                SUM(value) / 1000.0
-            FROM solar_raw GROUP BY day
-        """)
+        return SolarAgg
+
+def SolarAgg(object):
+    def __init__(self):
+        self.sum = 0
+    
+    def step(self, value):
+        self.sum += value
+
+    def finalize(self):
+        return self.sum / 1000
