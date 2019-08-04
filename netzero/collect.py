@@ -1,8 +1,10 @@
 import sqlite3
 import datetime
+import argparse
 import configparser
 
 import netzero.sources
+
 
 def add_args(parser):
     sources_group = parser.add_argument_group(
@@ -27,51 +29,52 @@ def add_args(parser):
             const=source)
 
     parser.add_argument("-s",
-                                "--start",
-                                metavar="YYYY-MM-DD",
-                                help="start date for date range",
-                                dest="start",
-                                type=datetime.date.fromisoformat)
+                        "--start",
+                        metavar="YYYY-MM-DD",
+                        help="start date for date range",
+                        dest="start",
+                        type=datetime.date.fromisoformat)
     parser.add_argument("-e",
-                                "--end",
-                                metavar="YYYY-MM-DD",
-                                help="end date for date range",
-                                dest="end",
-                                type=datetime.date.fromisoformat)
+                        "--end",
+                        metavar="YYYY-MM-DD",
+                        help="end date for date range",
+                        dest="end",
+                        type=datetime.date.fromisoformat)
 
-    parser.add_argument(
-        "-c",
-        required=True,
-        metavar="config",
-        help="loads inputs from the specified INI file",
-        dest="config",
-        type=argparse.FileType('r'))
+    parser.add_argument("-c",
+                        required=True,
+                        metavar="config",
+                        help="loads inputs from the specified INI file",
+                        dest="config",
+                        type=argparse.FileType('r'))
 
     parser.add_argument("database")
 
-def collect_data(arguments):
+
+def main(arguments):
     if arguments.config:
-        config = configparser.read_file(arguments.config)
+        config = configparser.ConfigParser()
+        config.read_file(arguments.config)
     else:
         config = None
 
-    conn = sqlite3.connect(arguments.database,
-                           detect_types=sqlite3.PARSE_DECLTYPES)
+    conn = sqlite3.connect(arguments.database, detect_types=sqlite3.PARSE_DECLTYPES)
+    
+    sources = arguments.sources
 
     # Load configurations into sources before collecting data
     # This lets the user respond to config errors early
-    initialized_sources = []
-    for source in arguments.sources:
-        initialized_sources.append(source(config))
+    sources = [source(config) for source in sources]
 
-    for source in initialized_sources:
-        print("Collecting data for", source.name)
+    for source in sources:
+        # Create a string for sqlite subtitution
+        substitutions = "(" + ",".join(["?"]*len(source.columns)) + ")"
 
-        # Collect the raw data from the source
-        source.collect_data(start_date=arguments.start, end_date=arguments.end)
+        # Create the table
+        query = f"CREATE TABLE IF NOT EXISTS ?{substitutions}"
+        conn.execute(query, (sources.name, *sources.columns))
 
-        # Process the data from the source
-        source.process_data()
-
-def main():
-    print("COLLECT")
+        # Insert the data
+        query = f"INSERT OR IGNORE INTO ?{substitutions} VALUES {substitutions}"
+        for row in source.collect_data(arguments.start, arguments.end):
+            conn.execute(query, (sources.name, *sources.columns, *row))
