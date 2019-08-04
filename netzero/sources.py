@@ -3,7 +3,6 @@ import abc
 
 class DataSource(abc.ABC):
     TIME = "time"
-    DAY = "day"
 
     @property
     @abc.abstractmethod

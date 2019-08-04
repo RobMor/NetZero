@@ -18,7 +18,8 @@ from netzero import util
 
 
 class Solar(DataSource):
-    columns = ("value",)
+    columns = (DataSource.TIME, "value")
+    summary = "collects solar data"
 
     default_start = datetime.datetime(2016, 1, 27)
     default_end = datetime.datetime.today()

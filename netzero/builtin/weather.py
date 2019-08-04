@@ -3,40 +3,24 @@ import datetime
 import requests
 import json
 
-from netzero.sources.base import DataSource
-from netzero.sources import util
+from netzero.sources import DataSource
+from netzero import util
 
 
 class Weather(DataSource):
+    columns = (DataSource.TIME, "value", "station")
+    summary = "collects weather data"
+
     default_start = datetime.datetime(2014, 1, 1)
     default_end = datetime.datetime.today()
 
     def __init__(self, config, conn):
-        super().validate_config(config,
-                                entry="weather",
-                                fields=["api_key", "stations"])
+        util.validate_config(config,
+                             entry="weather",
+                             fields=["api_key", "stations"])
 
         self.api_key = config["weather"]["api_key"]
         self.stations = json.loads(config["weather"]["stations"])
-
-        self.conn = conn
-
-        with self.conn:
-            # Create the table for the raw data
-            # We collect data from multiple stations for each day so date cant be primary key
-            self.conn.execute("""
-                CREATE TABLE IF NOT EXISTS weather_raw (
-                    time TIMESTAMP, 
-                    value REAL,
-                    station TEXT,
-                    PRIMARY KEY (time, station)
-                )
-            """)
-
-            # Create the table for the processed data
-            self.conn.execute("""
-                CREATE TABLE IF NOT EXISTS weather_day(date DATE PRIMARY KEY, value REAL)
-            """)
 
     def collect_data(self, start_date=None, end_date=None):
         """Collect the raw weather data from NCDC API
@@ -69,20 +53,13 @@ class Weather(DataSource):
                 print("Error querying NCDC API")
                 continue
 
-            with self.conn:
-                for entry in raw_data.get("results", []):
-                    # Insert the weather data to the table, to be averaged later
-                    date = datetime.datetime.fromisoformat(entry["date"])
-                    value = entry["value"]
-                    station = entry["station"]
+            for entry in raw_data.get("results", []):
+                # Insert the weather data to the table, to be averaged later
+                date = datetime.datetime.fromisoformat(entry["date"])
+                value = entry["value"]
+                station = entry["station"]
 
-                    self.conn.execute(
-                        """
-                        INSERT OR IGNORE INTO weather_raw (time, value, station) 
-                        VALUES (?, ?, ?)
-                    """, (date, value, station))
-
-                    print("WEATHER:", date, "--", value, ">", station)
+                yield date, value, station
 
     def query_api(self, start_date, end_date):
         """Query the NCDC API for average daily temperature data
@@ -127,11 +104,18 @@ class Weather(DataSource):
             print(response.text)
             return None
 
-    def process_data(self):
-        self.conn.execute("""
-            INSERT OR IGNORE INTO weather_day
-            SELECT
-                DATE(time) as realday,
-                AVG(value)
-            FROM weather_raw GROUP BY realday
-        """)
+    def aggregators(self):
+        return {("value", ): WeatherAgg}
+
+
+class WeatherAgg(object):
+    def __init__(self):
+        self.sum = 0
+        self.count = 0
+
+    def step(self, value):
+        self.sum += value
+        self.count += 1
+
+    def finalize(self):
+        return self.sum / self.count
