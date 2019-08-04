@@ -9,23 +9,23 @@ which orchestrates the entire process from collection to output.
 First, ensure that you have both Python 3 and pip installed:
 
 ```console
-~$ python --version
+$ python --version
 Python 3.7.3
 
-~$ pip --version
+$ pip --version
 pip 19.1.1 from ... (python 3.7)
 ```
 
 Then, all you have to do is run `pip install` on this repository:
 
 ```console
-~$ pip install netzero
+$ pip install netzero
 ```
 
 Or you can download and install `netzero` all in one step like so:
 
 ```console
-~$ pip install git+https://github.com/RobMor/NetZero.git
+$ pip install git+https://github.com/RobMor/NetZero.git
 ```
 
 These commands will install all dependencies and install `netzero` on your
@@ -39,7 +39,7 @@ A template with instructions is included in this repository.
 This tool offers a simple command line interface that can be accessed by running
 
 ```console
-~$ netzero
+$ netzero
 usage: netzero [-h] <command> ...
 
 Collects and formats data from multiple sources
