@@ -18,8 +18,11 @@ from netzero import util
 
 
 class Solar(DataSource):
-    columns = (DataSource.TIME, "value")
+    name = "Solar"
+    option = "s"
+    long_option = "solar"
     summary = "collects solar data"
+    columns = (DataSource.TIME, "value")
 
     default_start = datetime.datetime(2016, 1, 27)
     default_end = datetime.datetime.today()

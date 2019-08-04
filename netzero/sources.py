@@ -1,5 +1,7 @@
 import abc
 
+import entrypoint
+
 
 class DataSource(abc.ABC):
     TIME = "time"
@@ -30,3 +32,8 @@ class DataSource(abc.ABC):
     def aggregator(self):
         """Returns an dict from column tuples to sqlite3 aggregators"""
         pass
+
+def load():
+    for name, entrypoint in entrypoints.get_group_named("netzero.sources"):
+        source = entrypoint.load()
+        yield name, source

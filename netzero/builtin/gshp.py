@@ -11,8 +11,11 @@ from netzero import util
 
 
 class Gshp(DataSource):
-    columns = (DataSource.TIME, "value")
+    name = "GSHP"
+    option = "g"
+    long_option = "gshp"
     summary = "collects ground source heat pump data"
+    columns = (DataSource.TIME, "value")
 
     default_start = datetime.datetime(2016, 10, 31)
     default_end = datetime.datetime.today()

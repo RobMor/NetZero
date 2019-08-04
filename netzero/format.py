@@ -4,6 +4,8 @@ import sqlite3, csv
 import pandas as pd
 from sys import argv
 
+def add_args(parser):
+    pass
 
 def export(conn, filename):
     # Using pandas for the OUTER JOIN functionality
@@ -23,14 +25,5 @@ def export(conn, filename):
 
     out.to_csv(filename, index=False)
 
-
-usage = """
-Usage:
-export.py [database] [output filename]"""
-
-if __name__ == "__main__":
-    if len(argv) < 3:
-        print(usage)
-    else:
-        conn = sqlite3.connect(argv[1])
-        export(conn, argv[2])
+def main():
+    print("FORMAT")

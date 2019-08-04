@@ -59,8 +59,11 @@ tags = {
 
 
 class Pepco(DataSource):
-    columns = (DataSource.TIME, "value")  # TODO data types
+    name = "Pepco"
+    option = "p"
+    long_option = "pepco"
     summary = "collects pepco data"
+    columns = (DataSource.TIME, "value")  # TODO data types
 
     default_start = None
     default_end = None
