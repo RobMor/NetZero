@@ -58,8 +58,9 @@ def main(arguments):
     else:
         config = None
 
-    conn = sqlite3.connect(arguments.database, detect_types=sqlite3.PARSE_DECLTYPES)
-    
+    conn = sqlite3.connect(arguments.database,
+                           detect_types=sqlite3.PARSE_DECLTYPES)
+
     sources = arguments.sources
 
     # Load configurations into sources before collecting data
@@ -68,13 +69,13 @@ def main(arguments):
 
     for source in sources:
         # Create a string for sqlite subtitution
-        substitutions = "(" + ",".join(["?"]*len(source.columns)) + ")"
+        substitutions = "(" + ",".join(["?"] * len(source.columns)) + ")"
 
         # Create the table
         query = f"CREATE TABLE IF NOT EXISTS ?{substitutions}"
-        conn.execute(query, (sources.name, *sources.columns))
+        conn.execute(query, (source.name, *source.columns))
 
         # Insert the data
         query = f"INSERT OR IGNORE INTO ?{substitutions} VALUES {substitutions}"
         for row in source.collect_data(arguments.start, arguments.end):
-            conn.execute(query, (sources.name, *sources.columns, *row))
+            conn.execute(query, (source.name, *source.columns, *row))
