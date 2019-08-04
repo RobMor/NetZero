@@ -16,5 +16,12 @@ setup(
     url="https://github.com/RobMor/NetZero",
     packages=["netzero", "netzero.sources"],
     install_requires=["requests", "bs4", "pandas"],
-    entry_points={"console_scripts": ["netzero=netzero.__main__:main"]},
+    entry_points={
+        "console_scripts": ["netzero=netzero.__main__:main"],
+        "netzero.sources": [
+            "pepco=netzero.builtin.pepco:Pepco",
+            "gshp=netzero.builtin.gshp:Gshp",
+            "solar=netzero.builtin.solar:Solar",
+            "weather=netzero.builtin.weather:Weather",
+        ]},
 )
