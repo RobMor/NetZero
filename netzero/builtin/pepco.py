@@ -42,7 +42,8 @@ import datetime
 import itertools
 import xml.etree.ElementTree as ETree
 
-from netzero.sources.base import DataSource
+from netzero.sources import DataSource
+from netzero import util
 
 tags = {
     "entry": "{http://www.w3.org/2005/Atom}entry",
@@ -65,7 +66,7 @@ class Pepco(DataSource):
     default_end = None
 
     def __init__(self, config, conn):
-        super().validate_config(config, entry="pepco", fields=["files"])
+        util.validate_config(config, entry="pepco", fields=["files"])
 
         self.files = json.loads(config["pepco"]["files"])
 
