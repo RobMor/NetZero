@@ -1,11 +1,12 @@
-.vscode/
-
-__pycache__/
-venv/
+# Ignore development artifacts
+.vscode
+venv
+__pycache__
 *.egg-info
 
 # Ignore personal configurations
-options.ini
+*.ini
+!example_config.ini
 
 # Ignore database files
 *.db
