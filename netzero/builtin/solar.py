@@ -18,6 +18,8 @@ from netzero import util
 
 
 class Solar(DataSource):
+    columns = ("value",)
+
     default_start = datetime.datetime(2016, 1, 27)
     default_end = datetime.datetime.today()
 
@@ -95,11 +97,14 @@ class Solar(DataSource):
                             params=payload)
         return json.loads(data.text)
 
-    def process_data(self):
+    def aggregators(self):
         """Computes the daily input of the solar panels in kWh."""
         # Developers note, these dates are in EST already so we can just directly
         # convert them
-        return SolarAgg
+        return {
+            ("value",): SolarAgg
+        }
+
 
 def SolarAgg(object):
     def __init__(self):

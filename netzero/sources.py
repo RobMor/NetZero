@@ -2,6 +2,9 @@ import abc
 
 
 class DataSource(abc.ABC):
+    TIME = "time"
+    DAY = "day"
+
     @property
     @abc.abstractmethod
     def summary(self):
@@ -16,6 +19,7 @@ class DataSource(abc.ABC):
     @property
     @abc.abstractmethod
     def columns(self):
+        """An iterable containing column names to add to table"""
         pass
 
     @abc.abstractmethod
@@ -25,5 +29,5 @@ class DataSource(abc.ABC):
 
     @abc.abstractmethod
     def aggregator(self):
-        """Returns an sqlite3 aggregator for this data source"""
+        """Returns an dict from column tuples to sqlite3 aggregators"""
         pass
