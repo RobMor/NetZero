@@ -14,7 +14,7 @@ class Weather(DataSource):
     default_start = datetime.datetime(2014, 1, 1)
     default_end = datetime.datetime.today()
 
-    def __init__(self, config, conn):
+    def __init__(self, config):
         util.validate_config(config,
                              entry="weather",
                              fields=["api_key", "stations"])

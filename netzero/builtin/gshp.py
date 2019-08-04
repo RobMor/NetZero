@@ -6,34 +6,24 @@ import time
 import requests
 import bs4
 
-from netzero.sources.base import DataSource
-from netzero.sources import util
+from netzero.sources import DataSource
+from netzero import util
 
 
 class Gshp(DataSource):
+    columns = (DataSource.TIME, "value")
+    summary = "collects ground source heat pump data"
+
     default_start = datetime.datetime(2016, 10, 31)
     default_end = datetime.datetime.today()
 
-    def __init__(self, config, conn):
-        super().validate_config(config,
+    def __init__(self, config):
+        util.validate_config(config,
                                 entry="gshp",
                                 fields=["username", "password"])
 
         self.username = config["gshp"]["username"]
         self.password = config["gshp"]["password"]
-
-        self.conn = conn
-
-        with self.conn:
-            # Create the table for the raw data
-            self.conn.execute("""
-                CREATE TABLE IF NOT EXISTS gshp_raw(time TIMESTAMP PRIMARY KEY, value REAL)
-            """)
-
-            # Create the table for the processed data
-            self.conn.execute("""
-                CREATE TABLE IF NOT EXISTS gshp_day(date DATE PRIMARY KEY, value REAL)
-            """)
 
     def collect_data(self, start_date=None, end_date=None):
         """Collects raw furnace usage data from the Symphony website.
@@ -58,20 +48,13 @@ class Gshp(DataSource):
         for _, day in util.time_intervals(start_date, end_date, days=1):
             parsed = self.scrape_json(session, day)
 
-            with self.conn:
-                for row in parsed:
-                    time = int(row["1"])  # Unix timestamp
-                    time = datetime.datetime.fromtimestamp(time)
+            for row in parsed:
+                time = int(row["1"])  # Unix timestamp
+                time = datetime.datetime.fromtimestamp(time)
 
-                    value = int(row["78"]
-                                )  # The number of Watts used in the time frame
+                value = int(row["78"])  # The number of Watts
 
-                    self.conn.execute(
-                        """
-                        INSERT OR IGNORE INTO gshp_raw(time, value) VALUES(?,?)
-                    """, (time, value))
-
-                    print("GSHP:", time, "--", value)
+                yield time, value
 
         session.close()
 
@@ -158,20 +141,9 @@ class Gshp(DataSource):
         the amount of power it was using, and then sum this inervals up over the day
         to get the entire power usage for the day.
         """
-        # Utilize sqlites custom aggregation functions
-        self.conn.create_aggregate("WATTHOURS", 2, WattHourAgg)
-
-        # Make sure to sort, and THEN group by the day.
-        # The aggregation function depends on the data being sorted to work properly
-        self.conn.execute("""
-            INSERT OR IGNORE INTO gshp_day
-            SELECT 
-                DATE(time, 'unixepoch') AS day,
-                WATTHOURS(time, value)
-            FROM 
-                (SELECT time, value from gshp_raw ORDER BY time) AS sorted
-            GROUP BY day
-        """)
+        return {
+            ("time", "value"): WattHourAgg
+        }
 
 
 ### TODO -- Deal with missing data. Hours at a time may be unaccounted for!!!
