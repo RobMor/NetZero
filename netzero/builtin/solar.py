@@ -25,7 +25,9 @@ class Solar(DataSource):
     default_end = datetime.datetime.today()
 
     def __init__(self, config):
-        util.validate_config(config, entry="solar", fields=["api_key", "site_id"])
+        util.validate_config(config,
+                             entry="solar",
+                             fields=["api_key", "site_id"])
 
         self.api_key = config["solar"]["api_key"]
         self.site_id = config["solar"]["site_id"]
@@ -102,15 +104,13 @@ class Solar(DataSource):
         """Computes the daily input of the solar panels in kWh."""
         # Developers note, these dates are in EST already so we can just directly
         # convert them
-        return {
-            ("value",): SolarAgg
-        }
+        return {("value", ): SolarAgg}
 
 
 def SolarAgg(object):
     def __init__(self):
         self.sum = 0
-    
+
     def step(self, value):
         self.sum += value
 
