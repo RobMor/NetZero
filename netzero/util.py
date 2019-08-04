@@ -28,7 +28,7 @@ def time_intervals(start_date,
 
         yield (prev, end_date)
 
-def validate_config(self, config, entry, fields):
+def validate_config(config, entry, fields):
     if entry not in config:
         raise ValueError("'%s' entry not in config" % entry)
 
