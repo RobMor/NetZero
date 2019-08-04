@@ -28,11 +28,11 @@ def time_intervals(start_date,
 
         yield (prev, end_date)
 
+
 def validate_config(config, entry, fields):
     if entry not in config:
         raise ValueError("'%s' entry not in config" % entry)
 
     for field in fields:
         if field not in config[entry]:
-            raise ValueError("'%s' field not in '%s' entry" %
-                                (field, entry))
+            raise ValueError("'%s' field not in '%s' entry" % (field, entry))
