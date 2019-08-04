@@ -14,7 +14,7 @@ import datetime
 import sqlite3
 
 from netzero.sources import DataSource
-from netzero.util import util
+from netzero import util
 
 
 class Solar(DataSource):
