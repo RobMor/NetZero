@@ -1,13 +1,14 @@
 #!/usr/bin/env python3
 
-import sqlite3, csv
-import pandas as pd
+import csv
+import sqlite3
 from sys import argv
 
 def add_args(parser):
     pass
 
 def export(conn, filename):
+    raise NotImplementedError()
     # Using pandas for the OUTER JOIN functionality
     pepco = pd.read_sql_query("SELECT day, value AS pepco FROM pepco_day",
                               conn)

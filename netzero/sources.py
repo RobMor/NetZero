@@ -1,6 +1,6 @@
 import abc
 
-import entrypoint
+import entrypoints
 
 
 class DataSource(abc.ABC):
@@ -34,7 +34,7 @@ class DataSource(abc.ABC):
         pass
 
 def load():
-    for name, entrypoint in entrypoints.get_group_named("netzero.sources"):
+    for name, entrypoint in entrypoints.get_group_named("netzero.sources").items():
         source = entrypoint.load()
         yield name, source
 
