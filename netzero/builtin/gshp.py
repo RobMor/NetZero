@@ -137,7 +137,7 @@ class Gshp(DataSource):
         else:
             return []
 
-    def process_data(self):
+    def aggregators(self):
         """
         Calculates the daily energy usage by the Ground Source Heat Pump system
         based on the readings. This means you have to multiply each time interval by

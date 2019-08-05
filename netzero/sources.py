@@ -29,7 +29,7 @@ class DataSource(abc.ABC):
         pass
 
     @abc.abstractmethod
-    def aggregator(self):
+    def aggregators(self):
         """Returns an dict from column tuples to sqlite3 aggregators"""
         pass
 

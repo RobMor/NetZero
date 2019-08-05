@@ -128,7 +128,7 @@ class Pepco(DataSource):
 
         return entries
 
-    def process_data(self) -> None:
+    def aggregators(self) -> None:
         """Processes the PEPCO data in the database.
 
         Calculates the daily power usage in kWh for each day in pepco_raw.
