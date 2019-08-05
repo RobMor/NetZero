@@ -55,13 +55,14 @@ available commands:
 ## Example
 
 Say you wanted to collect Pepco, SolarEdge, and Weather data since August 2019.
-First you need to ensure that your configuration file is set up. In this example
-we will call it `config.ini`. Also, since we don't already have a database for 
-our data, we will tell `netzero` to create one called `netzero.db`. To 
-collect our data we can run this command:
+First you need to ensure that your configuration file is set up. You can place
+the configuration anywhere you want as along as you pass it in on the commandline.
+In this example we will call it `config.ini`. Also, since we don't already have 
+a database for our data, we will tell `netzero` to create one called `netzero.db`. 
+To collect our data we can run this command:
 
 ```console
-$ netzero collect +psw --start=2019-08-01 -c config.json netzero.db
+$ netzero collect +psw --start=2019-08-01 -c config.ini netzero.db
 ```
 
 Lets break this command down:
