@@ -10,29 +10,27 @@ First, ensure that you have both Python 3 and pip installed:
 
 ```console
 $ python --version
-Python 3.7.3
-
 $ pip --version
-pip 19.1.1 from ... (python 3.7)
 ```
 
-Then, all you have to do is run `pip install` on this repository:
-
-```console
-$ pip install netzero
-```
-
-Or you can download and install `netzero` all in one step like so:
+Then, all you have to do is run this command to install `netzero` and its dependencies:
 
 ```console
 $ pip install git+https://github.com/RobMor/NetZero.git
+```
+
+If you prefer to download the repository yourself you can run the following command
+from within the repository to install `netzero` and its dependencies.
+
+```console
+$ pip install .
 ```
 
 These commands will install all dependencies and install `netzero` on your
 machine.
 
 In order to actually use the tool you'll need to set up an `config.ini` file.
-A template with instructions is included in this repository.
+A template with instructions is included in the file `example_config.ini`.
 
 ## Usage
 
