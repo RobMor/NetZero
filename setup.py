@@ -14,7 +14,7 @@ setup(
     "A collection of tools to mine data on the efficiency of a house",
     long_description=__doc__,
     url="https://github.com/RobMor/NetZero",
-    packages=["netzero"],
+    packages=["netzero", "netzero.builtin"],
     install_requires=["requests", "bs4", "entrypoints"],
     entry_points={
         "console_scripts": ["netzero=netzero.__main__:main"],
