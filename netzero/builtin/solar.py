@@ -24,8 +24,8 @@ class Solar(DataSource):
     summary = "collects solar data"
     columns = (DataSource.TIME, "value")
 
-    default_start = datetime.datetime(2016, 1, 27)
-    default_end = datetime.datetime.today()
+    default_start = datetime.date(2016, 1, 27)
+    default_end = datetime.date.today()
 
     def __init__(self, config):
         util.validate_config(config,

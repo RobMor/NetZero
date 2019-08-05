@@ -65,9 +65,6 @@ class Pepco(DataSource):
     summary = "collects pepco data"
     columns = (DataSource.TIME, "value")  # TODO data types
 
-    default_start = None
-    default_end = None
-
     def __init__(self, config, conn):
         util.validate_config(config, entry="pepco", fields=["files"])
 

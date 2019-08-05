@@ -17,8 +17,8 @@ class Gshp(DataSource):
     summary = "collects ground source heat pump data"
     columns = (DataSource.TIME, "value")
 
-    default_start = datetime.datetime(2016, 10, 31)
-    default_end = datetime.datetime.today()
+    default_start = datetime.date(2016, 10, 31)
+    default_end = datetime.date.today()
 
     def __init__(self, config):
         util.validate_config(config,

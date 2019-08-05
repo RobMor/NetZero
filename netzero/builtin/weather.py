@@ -14,8 +14,8 @@ class Weather(DataSource):
     summary = "collects weather data"
     columns = (DataSource.TIME, "value", "station")  # TODO allow for primary keys
 
-    default_start = datetime.datetime(2014, 1, 1)
-    default_end = datetime.datetime.today()
+    default_start = datetime.date(2014, 1, 1)
+    default_end = datetime.date.today()
 
     def __init__(self, config):
         util.validate_config(config,
