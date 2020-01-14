@@ -1,34 +1,33 @@
-import sqlite3
 import datetime
 import json
 import time
 
 import requests
 import bs4
+from sqlalchemy import Column, DateTime, Float
 
-from netzero.sources import DataSource
-from netzero import util
+import netzero.db
+import netzero.util
 
 
-class Gshp(DataSource):
-    name = "GSHP"
-    option = "g"
-    long_option = "gshp"
-    summary = "collects ground source heat pump data"
-    columns = (DataSource.TIME, "value")
+class Gshp:
+    name = "gshp"
+    summary = "Symphony ground source heat pump data"
 
     default_start = datetime.date(2016, 10, 31)
     default_end = datetime.date.today()
 
+
     def __init__(self, config):
-        util.validate_config(config,
+        netzero.util.validate_config(config,
                              entry="gshp",
                              fields=["username", "password"])
 
         self.username = config["gshp"]["username"]
         self.password = config["gshp"]["password"]
 
-    def collect_data(self, start_date=None, end_date=None):
+
+    def collect_data(self, db_session, start_date=None, end_date=None):
         """Collects raw furnace usage data from the Symphony website.
 
         Parameters
@@ -48,8 +47,14 @@ class Gshp(DataSource):
 
         session = self.establish_session()
 
-        for _, day in util.time_intervals(start_date, end_date, days=1):
+        for _, day in netzero.util.time_intervals(start_date, end_date, days=1):
+            netzero.util.print_status("GSHP", "Collecting: {}".format(day.isoformat()))
+
             parsed = self.scrape_json(session, day)
+
+            session.query(GSHPEntry).filter(
+                GSHPEntry.time.between(day, day + datetime.timedelta(days=1))
+            ).delete(synchronize_session=False)
 
             for row in parsed:
                 time = int(row["1"])  # Unix timestamp
@@ -57,9 +62,15 @@ class Gshp(DataSource):
 
                 value = int(row["78"])  # The number of Watts
 
-                yield time, value
+                new_entry = GSHPEntry(time=time, watts=value)
+                db_session.add(new_entry)
+
+            db_session.commit()
 
         session.close()
+
+        netzero.util.print_status("GSHP", "Complete", newline=True)
+
 
     def establish_session(self) -> requests.Session:
         """Establishes a session with the symphony website 
@@ -101,6 +112,7 @@ class Gshp(DataSource):
 
         return s
 
+
     def scrape_json(self, session, date):
         """Requests some data for a certain day from the Symphony website.
 
@@ -137,50 +149,48 @@ class Gshp(DataSource):
         else:
             return []
 
-    def aggregators(self):
-        """
-        Calculates the daily energy usage by the Ground Source Heat Pump system
-        based on the readings. This means you have to multiply each time interval by
-        the amount of power it was using, and then sum this inervals up over the day
-        to get the entire power usage for the day.
-        """
-        return {("time", "value"): WattHourAgg}
+
+class GSHPEntry(netzero.db.ModelBase):
+    __tablename__ = "gshp"
+
+    time = Column(DateTime, primary_key=True)
+    watts = Column(Float)
 
 
-### TODO -- Deal with missing data. Hours at a time may be unaccounted for!!!
-class WattHourAgg(object):
-    """An Sqlite3 aggregator to convert GSHP power usage to energy usage
+# ### TODO -- Deal with missing data. Hours at a time may be unaccounted for!!!
+# class WattHourAgg(object):
+#     """An Sqlite3 aggregator to convert GSHP power usage to energy usage
 
-    This class is meant to be fed to sqlite3's create_aggregate method. The 
-    constructor defines the beginning state, before any entries have been read. 
-    The step method handles new entries. Finally the finalize method returns 
-    whatever the final result is.
-    """
-    def __init__(self):
-        """
-        Initialize values
-        """
-        self.watt_hours = 0
-        self.prev_time = None
+#     This class is meant to be fed to sqlite3's create_aggregate method. The 
+#     constructor defines the beginning state, before any entries have been read. 
+#     The step method handles new entries. Finally the finalize method returns 
+#     whatever the final result is.
+#     """
+#     def __init__(self):
+#         """
+#         Initialize values
+#         """
+#         self.watt_hours = 0
+#         self.prev_time = None
 
-    def step(self, time, value):
-        """
-        Read in sorted timeseries data. Compute the amount of time since the
-        previous entry and conert it to hours. Convert the watts to kilowatts 
-        and multiply the time and the wattage to get the energy usage.
-        """
-        time = datetime.datetime.fromisoformat(time)
-        kw = value / 1000
+#     def step(self, time, value):
+#         """
+#         Read in sorted timeseries data. Compute the amount of time since the
+#         previous entry and conert it to hours. Convert the watts to kilowatts 
+#         and multiply the time and the wattage to get the energy usage.
+#         """
+#         time = datetime.datetime.fromisoformat(time)
+#         kw = value / 1000
 
-        if self.prev_time:  # Compute time since previous entry
-            h = (time - self.prev_time).total_seconds() / 3600
-        else:  # Compute time since start of day
-            midnight = time.replace(hour=0, minute=0, second=0)
-            h = (time - midnight).total_seconds() / 3600
+#         if self.prev_time:  # Compute time since previous entry
+#             h = (time - self.prev_time).total_seconds() / 3600
+#         else:  # Compute time since start of day
+#             midnight = time.replace(hour=0, minute=0, second=0)
+#             h = (time - midnight).total_seconds() / 3600
 
-        self.watt_hours += kw * h
+#         self.watt_hours += kw * h
 
-        self.prev_time = time
+#         self.prev_time = time
 
-    def finalize(self):
-        return self.watt_hours
+#     def finalize(self):
+#         return self.watt_hours

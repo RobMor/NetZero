@@ -59,7 +59,7 @@ class Weather:
                 continue
 
             session.query(WeatherEntry).filter(
-                WeatherEntry.date.between(interval[0], interval[1])
+                WeatherEntry.date.between(interval[0], interval[1]) # TODO test boundaries
             ).delete(synchronize_session=False)
 
             for entry in raw_data.get("results", []):
@@ -74,7 +74,7 @@ class Weather:
             
             session.commit()
 
-        netzero.util.print_status("Weather", "Complete")
+        netzero.util.print_status("Weather", "Complete", newline=True)
 
 
     def query_api(self, start_date, end_date):
