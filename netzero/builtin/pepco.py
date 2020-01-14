@@ -37,13 +37,14 @@ Green Button XML Format for Documentation Purposes:
 """
 
 import json
-import sqlite3
 import datetime
 import itertools
 import xml.etree.ElementTree as ETree
 
-from netzero.sources import DataSource
-from netzero import util
+from sqlalchemy import Column, DateTime, Float
+
+import netzero.db
+import netzero.util
 
 tags = {
     "entry": "{http://www.w3.org/2005/Atom}entry",
@@ -58,19 +59,18 @@ tags = {
 }
 
 
-class Pepco(DataSource):
-    name = "Pepco"
-    option = "p"
-    long_option = "pepco"
-    summary = "collects pepco data"
-    columns = (DataSource.TIME, "value")  # TODO data types
+class Pepco:
+    name = "pepco"
+    summary = "Pepco data"
 
-    def __init__(self, config, conn):
-        util.validate_config(config, entry="pepco", fields=["files"])
+
+    def __init__(self, config):
+        netzero.util.validate_config(config, entry="pepco", fields=["files"])
 
         self.files = json.loads(config["pepco"]["files"])
 
-    def collect_data(self, start_date=None, end_date=None) -> None:
+
+    def collect_data(self, session, start_date=None, end_date=None) -> None:
         """Collects data from PEPCO XML files.
 
         Collects the raw energy usage data from Pepco's XML files and stores it
@@ -106,7 +106,12 @@ class Pepco(DataSource):
 
                     value = int(reading.find(tags["value"]).text)
 
-                    yield start, value
+                    new_entry = PepcoEntry(time=start, watt_hrs=value)
+
+                    session.merge(new_entry)
+                
+                session.commit()
+
 
     def concatenate_files(self, files):
         """
@@ -125,27 +130,9 @@ class Pepco(DataSource):
 
         return entries
 
-    def aggregators(self) -> None:
-        """Processes the PEPCO data in the database.
 
-        Calculates the daily power usage in kWh for each day in pepco_raw.
+class PepcoEntry(netzero.db.ModelBase):
+    __tablename__ = "pepco"
 
-        Parameters
-        ----------
-        start : datetime.datetime.DateTime, optional
-            The start of the data collection range
-        end : datetime.datetime.DateTime, optional
-            The end of the data collection range
-        """
-        return {("value",): PepcoAgg}
-
-
-class PepcoAgg(object):
-    def __init__(self):
-        self.sum = 0
-
-    def step(self, value):
-        self.sum += value
-
-    def finalize(self):
-        return self.sum / 1000
+    time = Column(DateTime, primary_key=True)
+    watt_hrs = Column(Float, primary_key=True)
