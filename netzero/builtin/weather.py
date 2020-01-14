@@ -49,13 +49,13 @@ class Weather:
         for interval in netzero.util.time_intervals(start_date,
                                             end_date,
                                             days=num_days):
-            print("Weather -- COLLECTING:", interval[0].isoformat(), "to", interval[1].isoformat(), end="\r")
+            netzero.util.print_status("Weather", "Collecting: {} to {}".format(interval[0].isoformat(), interval[1].isoformat()))
 
             # TODO -- REMOVE ASSUMPTION THAT LEN(DATA) < LIMIT
             raw_data = self.query_api(interval[0], interval[1])
 
             if raw_data is None:
-                print("Error querying NCDC API")  # TODO exception here?
+                print("ERROR QUERYING API")  # TODO exception here?
                 continue
 
             session.query(WeatherEntry).filter(
@@ -74,7 +74,7 @@ class Weather:
             
             session.commit()
 
-        print()
+        netzero.util.print_status("Weather", "Complete")
 
 
     def query_api(self, start_date, end_date):

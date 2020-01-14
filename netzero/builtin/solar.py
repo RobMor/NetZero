@@ -7,7 +7,6 @@ data and convert it into a useful daily summation of energy production.
 Solar Edge API documentation (ca 2019):
 https://www.solaredge.com/sites/default/files/se_monitoring_api.pdf
 """
-
 import json
 import requests
 import datetime
@@ -54,7 +53,7 @@ class Solar:
 
         # Iterate through each date range
         for interval in netzero.util.time_intervals(start_date, end_date, days=30):
-            print("SolarEdge -- COLLECTING:", interval[0].isoformat(), "to", interval[1].isoformat(), end="\r")
+            netzero.util.print_status("SolarEdge", "Collecting: {} to {}".format(interval[0].isoformat(), interval[1].isoformat()))
 
             result = self.query_api(interval[0], interval[1])
 
@@ -62,9 +61,12 @@ class Solar:
             # This is faster than merging everything which is what you have to
             # do because sqlalchemy doesnt support INSERT OR IGNORE.
             session.query(SolarEdgeEntry).filter(
-                SolarEdgeEntry.time.between(start_date, end_date)
+                SolarEdgeEntry.time.between(
+                    interval[0], 
+                    interval[1] + datetime.timedelta(days=1),
+                )
             ).delete(synchronize_session=False)
-
+            
             for entry in result["energy"]["values"]:
                 date = datetime.datetime.fromisoformat(entry["date"])
                 value = entry["value"] or 0
@@ -72,10 +74,10 @@ class Solar:
                 new_entry = SolarEdgeEntry(time=date, watt_hrs=value)
 
                 session.add(new_entry)
-
+            
             session.commit()
-
-        print()
+        
+        netzero.util.print_status("SolarEdge", "Complete", newline=True)
 
 
     def query_api(self, start_date, end_date):

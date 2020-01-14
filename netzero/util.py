@@ -36,3 +36,8 @@ def validate_config(config, entry, fields):
     for field in fields:
         if field not in config[entry]:
             raise ValueError("'%s' field not in '%s' entry" % (field, entry))
+
+
+def print_status(source, message, newline=False):
+    end = "\n" if newline else ""
+    print("\033[2K\r" + source + " -- " + message, end=end)
