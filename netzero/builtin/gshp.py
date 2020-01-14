@@ -52,7 +52,7 @@ class Gshp:
 
             parsed = self.scrape_json(session, day)
 
-            session.query(GSHPEntry).filter(
+            db_session.query(GSHPEntry).filter(
                 GSHPEntry.time.between(day, day + datetime.timedelta(days=1))
             ).delete(synchronize_session=False)
 
