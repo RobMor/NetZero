@@ -3,7 +3,6 @@
 Provides the command line interface for collecting data from the various soures.
 """
 
-import sqlite3
 import datetime
 import configparser
 

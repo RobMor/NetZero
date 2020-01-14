@@ -1,4 +1,3 @@
-import sqlite3
 import datetime
 import argparse
 import configparser
