@@ -49,6 +49,8 @@ class Weather:
         for interval in netzero.util.time_intervals(start_date,
                                             end_date,
                                             days=num_days):
+            print("Weather -- COLLECTING:", interval[0].isoformat(), "to", interval[1].isoformat(), end="\r")
+
             # TODO -- REMOVE ASSUMPTION THAT LEN(DATA) < LIMIT
             raw_data = self.query_api(interval[0], interval[1])
 
@@ -71,6 +73,8 @@ class Weather:
                 session.add(new_entry)
             
             session.commit()
+
+        print()
 
 
     def query_api(self, start_date, end_date):
