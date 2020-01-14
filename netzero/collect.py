@@ -50,5 +50,5 @@ def main(arguments):
 
     for source in sources:
         session = Session()
-        source.collect_data(session, arguments.start, arguments.end)
+        source.collect(session, arguments.start, arguments.end)
         session.close()

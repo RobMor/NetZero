@@ -34,7 +34,7 @@ class Solar:
         self.site_id = config["solar"]["site_id"]
 
 
-    def collect_data(self, session, start_date=None, end_date=None):
+    def collect(self, session, start_date=None, end_date=None):
         """Collect raw solar data from SolarEdge
 
         Collects data using the SolarEdge API, storing it in the database.

@@ -70,7 +70,7 @@ class Pepco:
         self.files = json.loads(config["pepco"]["files"])
 
 
-    def collect_data(self, session, start_date=None, end_date=None) -> None:
+    def collect(self, session, start_date=None, end_date=None) -> None:
         """Collects data from PEPCO XML files.
 
         Collects the raw energy usage data from Pepco's XML files and stores it

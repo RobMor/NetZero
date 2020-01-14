@@ -27,7 +27,7 @@ class Gshp:
         self.password = config["gshp"]["password"]
 
 
-    def collect_data(self, db_session, start_date=None, end_date=None):
+    def collect(self, db_session, start_date=None, end_date=None):
         """Collects raw furnace usage data from the Symphony website.
 
         Parameters

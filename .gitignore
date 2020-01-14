@@ -2,6 +2,7 @@
 */
 # Except these
 !netzero/
+!netzero/builtin/
 !tests/
 
 # Ignore development artifacts

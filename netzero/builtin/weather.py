@@ -25,7 +25,7 @@ class Weather:
         self.stations = json.loads(config["weather"]["stations"])
 
 
-    def collect_data(self, session, start_date=None, end_date=None):
+    def collect(self, session, start_date=None, end_date=None):
         """Collect the raw weather data from NCDC API
 
         Parameters
