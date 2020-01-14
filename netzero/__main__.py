@@ -32,7 +32,7 @@ def main():
     collect_parser = subparsers.add_parser(
         "collect",
         description=
-        "Collect data from various sources and store it in a local database",
+        "Collect data from various sources",
         help="Collect data",
         prefix_chars="-+")
     collect_parser.set_defaults(func=netzero.collect.main)
@@ -42,7 +42,8 @@ def main():
     # --- Formatting Arguments ---
     format_parser = subparsers.add_parser("format",
                                           description="Format data",
-                                          help="Format data")
+                                          help="Format data",
+                                          prefix_chars="-+")
     format_parser.set_defaults(func=netzero.format.main)
 
     netzero.format.add_args(format_parser)
@@ -56,6 +57,5 @@ def main():
         parser.print_help()
 
 
-# TODO -- ADD Defaults Option (--defaults allows you to use all the default options)
 if __name__ == "__main__":
     main()
