@@ -11,31 +11,31 @@ https://www.solaredge.com/sites/default/files/se_monitoring_api.pdf
 import json
 import requests
 import datetime
-import sqlite3
 
-from netzero.sources import DataSource
-from netzero import util
+from sqlalchemy import Column, DateTime, Float
+
+import netzero.db
+import netzero.util
 
 
-class Solar(DataSource):
-    name = "Solar"
-    option = "s"
-    long_option = "solar"
-    summary = "collects solar data"
-    columns = (DataSource.TIME, "value")
+class Solar:
+    name = "solaredge"
+    summary = "Solar Edge data"
 
     default_start = datetime.date(2016, 1, 27)
     default_end = datetime.date.today()
 
+
     def __init__(self, config):
-        util.validate_config(config,
+        netzero.util.validate_config(config,
                              entry="solar",
                              fields=["api_key", "site_id"])
 
         self.api_key = config["solar"]["api_key"]
         self.site_id = config["solar"]["site_id"]
 
-    def collect_data(self, start_date=None, end_date=None):
+
+    def collect_data(self, session, start_date=None, end_date=None):
         """Collect raw solar data from SolarEdge
 
         Collects data using the SolarEdge API, storing it in the database.
@@ -53,15 +53,30 @@ class Solar(DataSource):
             end_date = self.default_end
 
         # Iterate through each date range
-        for interval in util.time_intervals(start_date, end_date, days=30):
+        for interval in netzero.util.time_intervals(start_date, end_date, days=30):
+            print("SolarEdge -- COLLECTING:", interval[0].isoformat(), "to", interval[1].isoformat(), end="\r")
+
             result = self.query_api(interval[0], interval[1])
 
-            for entry in result["energy"]["values"]:
-                # Parse the time from the given string
-                date = datetime.datetime.fromisoformat(entry["date"])
-                value = entry["value"] or 0  # 0 if None
+            # Delete all previous entries for this time range
+            # This is faster than merging everything which is what you have to
+            # do because sqlalchemy doesnt support INSERT OR IGNORE.
+            session.query(SolarEdgeEntry).filter(
+                SolarEdgeEntry.time.between(start_date, end_date)
+            ).delete(synchronize_session=False)
 
-                yield date, value
+            for entry in result["energy"]["values"]:
+                date = datetime.datetime.fromisoformat(entry["date"])
+                value = entry["value"] or 0
+
+                new_entry = SolarEdgeEntry(time=date, watt_hrs=value)
+
+                session.add(new_entry)
+
+            session.commit()
+
+        print()
+
 
     def query_api(self, start_date, end_date):
         """A method to query the Solar Edge api for energy data
@@ -103,19 +118,9 @@ class Solar(DataSource):
                             params=payload)
         return json.loads(data.text)
 
-    def aggregators(self):
-        """Computes the daily input of the solar panels in kWh."""
-        # Developers note, these dates are in EST already so we can just directly
-        # convert them
-        return {("value", ): SolarAgg}
 
+class SolarEdgeEntry(netzero.db.ModelBase):
+    __tablename__ = "solaredge"
 
-def SolarAgg(object):
-    def __init__(self):
-        self.sum = 0
-
-    def step(self, value):
-        self.sum += value
-
-    def finalize(self):
-        return self.sum / 1000
+    time = Column(DateTime, primary_key=True)
+    watt_hrs = Column(Float)
