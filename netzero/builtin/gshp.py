@@ -1,6 +1,7 @@
 import datetime
 import json
 import time
+import itertools
 
 import requests
 import bs4
@@ -166,25 +167,35 @@ class Gshp:
         return session.query(sqlalchemy.func.min(GSHPEntry.time)).scalar()
 
 
-    def value(self, session, date):
-        entries = session.query(GSHPEntry.time, GSHPEntry.watts).filter(
-            sqlalchemy.func.strftime("%Y-%m-%d", GSHPEntry.time) == date.strftime("%Y-%m-%d")
-        ).order_by(GSHPEntry.time.asc()).all()
+    def format(self, session):
+        netzero.util.print_status("GSHP", "Collecting Data")
+        entries = session.query(GSHPEntry.time, GSHPEntry.watts).order_by(GSHPEntry.time.asc()).all()
 
-        total = 0
+        netzero.util.print_status("GSHP", "Grouping Data")
+        entry_groups = itertools.groupby(entries, lambda entry: entry[0].date())
 
-        # midnight
-        prev = datetime.datetime.combine(date, datetime.datetime.min.time())
-        for time, value in entries:
-            hours = (time - prev).total_seconds() / 3600
-            prev = time
+        data = {}
+        for day, entries in entry_groups:
+            netzero.util.print_status("GSHP", "Processing {}".format(day.strftime("%Y-%m-%d")))
+            total = 0
 
-            kw = value / 1000
-            kwh = kw * hours
+            # midnight
+            prev = datetime.datetime.combine(day, datetime.datetime.min.time())
+            for entry in entries:
+                hours = (entry.time - prev).total_seconds() / 3600
+                prev = entry.time
 
-            total += kwh
+                kw = entry.watts / 1000
+                kwh = kw * hours
 
-        return total
+                total += kwh
+
+            data[day] = total
+
+        netzero.util.print_status("GSHP", "Complete", newline=True)
+
+        return data
+
 
 class GSHPEntry(netzero.db.ModelBase):
     __tablename__ = "gshp"

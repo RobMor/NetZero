@@ -60,13 +60,12 @@ def main(arguments):
     engine = netzero.db.main(arguments)
     Session = sqlalchemy.orm.sessionmaker(bind=engine)
 
-    sessions = {}
+    data = []
 
     min_date = datetime.datetime.max
     max_date = datetime.datetime.min
     for source in sources:
         session = Session()
-        sessions[source] = session
 
         source_min = source.min_date(session)
         source_max = source.max_date(session)
@@ -75,6 +74,8 @@ def main(arguments):
         max_date = max(max_date, source_max)
 
         print("{}: {} to {}".format(source.name, source_min.isoformat(), source_max.isoformat()))
+
+        data.append(source.format(session))
 
 
     with open(arguments.output, 'w') as f:
@@ -90,9 +91,9 @@ def main(arguments):
             netzero.util.print_status("Format", "Exporting: {}".format(date.strftime("%Y-%m-%d")))
 
             row = [date.strftime("%Y-%m-%d")]
-            for source in sources:
-                row.append(source.value(sessions[source], date))
+            for d in data:
+                row.append(d.get(date))
             
             writer.writerow(row)
 
-    netzero.util.print_status("Format", "Exporting Complete")
+    netzero.util.print_status("Format", "Exporting Complete", newline=True)

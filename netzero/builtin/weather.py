@@ -131,8 +131,18 @@ class Weather:
         return datetime.datetime.combine(session.query(sqlalchemy.func.min(WeatherEntry.date)).scalar(), datetime.datetime.min.time())
 
 
-    def value(self, session, date):
-        return session.query(sqlalchemy.func.avg(WeatherEntry.temperature)).filter_by(date=date).scalar()
+    def format(self, session):
+        data = session.query(
+            WeatherEntry.date,
+            sqlalchemy.func.avg(WeatherEntry.temperature)
+        ).group_by(
+            sqlalchemy.func.strftime("%Y-%m-%d", WeatherEntry.date)
+        ).all()
+
+        # TODO make this print after the return...
+        netzero.util.print_status("Weather", "Complete", newline=True)
+
+        return {date: value for date, value in data}
 
 
 class WeatherEntry(netzero.db.ModelBase):

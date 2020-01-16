@@ -130,12 +130,15 @@ class Solar:
         return session.query(sqlalchemy.func.min(SolarEdgeEntry.time)).scalar()
 
 
-    def value(self, session, date):
-        return session.query(
-            sqlalchemy.func.sum(SolarEdgeEntry.watt_hrs) / 1000,
-        ).filter(
-            sqlalchemy.func.strftime("%Y-%m-%d", SolarEdgeEntry.time) == date.strftime("%Y-%m-%d")
-        ).scalar()
+    def format(self, session):
+        data = session.query(
+            SolarEdgeEntry.time, sqlalchemy.func.sum(SolarEdgeEntry.watt_hrs) / 1000,
+        ).group_by(sqlalchemy.func.strftime("%Y-%m-%d", SolarEdgeEntry.time)).all()
+
+        # TODO make this print after the return
+        netzero.util.print_status("SolarEdge", "Complete", newline=True)
+
+        return {date.date(): value for date, value in data}
 
 
 class SolarEdgeEntry(netzero.db.ModelBase):

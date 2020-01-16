@@ -37,11 +37,9 @@ def iter_days(start_date, end_date):
         delta = datetime.timedelta(days=1)
 
         curr = start_date
-        while curr < end_date:
-            yield curr
+        while curr <= end_date:
+            yield curr.date()
             curr = curr + delta
-        
-        yield end_date
 
 
 def validate_config(config, entry, fields):

@@ -140,12 +140,16 @@ class Pepco:
         return session.query(sqlalchemy.func.min(PepcoEntry.time)).scalar()
 
 
-    def value(self, session, date):
-        return session.query(
-            sqlalchemy.func.sum(PepcoEntry.watt_hrs) / 1000,
+    def value(self, session):
+        data = session.query(
+            PepcoEntry.time, sqlalchemy.func.sum(PepcoEntry.watt_hrs) / 1000,
         ).filter(
             sqlalchemy.func.strftime("%Y-%m-%d", PepcoEntry.time) == date.strftime("%Y-%m-%d")
         ).scalar()
+
+        netzero.util.print_status("Pepco", "Complete", newline=True)
+
+        return {date: value for date, value in data}
 
 
 class PepcoEntry(netzero.db.ModelBase):
