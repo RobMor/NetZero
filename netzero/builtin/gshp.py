@@ -4,6 +4,7 @@ import time
 
 import requests
 import bs4
+import sqlalchemy
 from sqlalchemy import Column, DateTime, Float
 
 import netzero.db
@@ -52,8 +53,15 @@ class Gshp:
 
             parsed = self.scrape_json(session, day)
 
+            if len(parsed) > 0:
+                start = datetime.datetime.fromtimestamp(int(parsed[0]["1"]))
+                end = datetime.datetime.fromtimestamp(int(parsed[-1]["1"]))
+            else:
+                start = day
+                end = day
+
             db_session.query(GSHPEntry).filter(
-                GSHPEntry.time.between(day, day + datetime.timedelta(days=1))
+                GSHPEntry.time.between(start, end)
             ).delete(synchronize_session=False)
 
             for row in parsed:
@@ -149,6 +157,34 @@ class Gshp:
         else:
             return []
 
+
+    def max_date(self, session):
+        return session.query(sqlalchemy.func.max(GSHPEntry.time)).scalar()
+
+
+    def min_date(self, session):
+        return session.query(sqlalchemy.func.min(GSHPEntry.time)).scalar()
+
+
+    def value(self, session, date):
+        entries = session.query(GSHPEntry.time, GSHPEntry.watts).filter(
+            sqlalchemy.func.strftime("%Y-%m-%d", GSHPEntry.time) == date.strftime("%Y-%m-%d")
+        ).order_by(GSHPEntry.time.asc()).all()
+
+        total = 0
+
+        # midnight
+        prev = datetime.datetime.combine(date, datetime.datetime.min.time())
+        for time, value in entries:
+            hours = (time - prev).total_seconds() / 3600
+            prev = time
+
+            kw = value / 1000
+            kwh = kw * hours
+
+            total += kwh
+
+        return total
 
 class GSHPEntry(netzero.db.ModelBase):
     __tablename__ = "gshp"

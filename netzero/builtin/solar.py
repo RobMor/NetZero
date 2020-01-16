@@ -11,6 +11,7 @@ import json
 import requests
 import datetime
 
+import sqlalchemy
 from sqlalchemy import Column, DateTime, Float
 
 import netzero.db
@@ -119,6 +120,22 @@ class Solar:
                             self.site_id + "/energy.json",
                             params=payload)
         return json.loads(data.text)
+
+
+    def max_date(self, session):
+        return session.query(sqlalchemy.func.max(SolarEdgeEntry.time)).scalar()
+
+
+    def min_date(self, session):
+        return session.query(sqlalchemy.func.min(SolarEdgeEntry.time)).scalar()
+
+
+    def value(self, session, date):
+        return session.query(
+            sqlalchemy.func.sum(SolarEdgeEntry.watt_hrs) / 1000,
+        ).filter(
+            sqlalchemy.func.strftime("%Y-%m-%d", SolarEdgeEntry.time) == date.strftime("%Y-%m-%d")
+        ).scalar()
 
 
 class SolarEdgeEntry(netzero.db.ModelBase):

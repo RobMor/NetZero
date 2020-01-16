@@ -29,6 +29,21 @@ def time_intervals(start_date,
         yield (prev, end_date)
 
 
+def iter_days(start_date, end_date):
+    assert isinstance(start_date, datetime.date)
+    assert isinstance(end_date, datetime.date)
+
+    if start_date < end_date:
+        delta = datetime.timedelta(days=1)
+
+        curr = start_date
+        while curr < end_date:
+            yield curr
+            curr = curr + delta
+        
+        yield end_date
+
+
 def validate_config(config, entry, fields):
     if entry not in config:
         raise ValueError("'%s' entry not in config" % entry)

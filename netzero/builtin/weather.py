@@ -2,6 +2,7 @@ import datetime
 import requests
 import json
 
+import sqlalchemy
 from sqlalchemy import Column, Date, Float, String
 
 import netzero.db
@@ -120,6 +121,18 @@ class Weather:
         else:
             print(response.text)
             return None
+
+    
+    def max_date(self, session):
+        return datetime.datetime.combine(session.query(sqlalchemy.func.max(WeatherEntry.date)).scalar(), datetime.datetime.min.time())
+
+    
+    def min_date(self, session):
+        return datetime.datetime.combine(session.query(sqlalchemy.func.min(WeatherEntry.date)).scalar(), datetime.datetime.min.time())
+
+
+    def value(self, session, date):
+        return session.query(sqlalchemy.func.avg(WeatherEntry.temperature)).filter_by(date=date).scalar()
 
 
 class WeatherEntry(netzero.db.ModelBase):

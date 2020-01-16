@@ -41,6 +41,7 @@ import datetime
 import itertools
 import xml.etree.ElementTree as ETree
 
+import sqlalchemy
 from sqlalchemy import Column, DateTime, Float
 
 import netzero.db
@@ -129,6 +130,22 @@ class Pepco:
             entries = itertools.chain(entries, root.findall(tags["entry"]))
 
         return entries
+
+
+    def max_date(self, session):
+        return session.query(sqlalchemy.func.max(PepcoEntry.time)).scalar()
+
+
+    def min_date(self, session):
+        return session.query(sqlalchemy.func.min(PepcoEntry.time)).scalar()
+
+
+    def value(self, session, date):
+        return session.query(
+            sqlalchemy.func.sum(PepcoEntry.watt_hrs) / 1000,
+        ).filter(
+            sqlalchemy.func.strftime("%Y-%m-%d", PepcoEntry.time) == date.strftime("%Y-%m-%d")
+        ).scalar()
 
 
 class PepcoEntry(netzero.db.ModelBase):

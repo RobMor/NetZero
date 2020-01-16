@@ -1,11 +1,29 @@
 #!/usr/bin/env python3
 
 import csv
-import sqlite3
-from sys import argv
+import argparse
+import datetime
+import configparser
+
+import sqlalchemy
+
+import netzero.sources
+import netzero.util
+
 
 def add_args(parser):
-    pass
+    netzero.sources.add_args(parser)
+    netzero.db.add_args(parser)
+
+    parser.add_argument("-c",
+                        required=True,
+                        metavar="config",
+                        help="loads inputs from the specified INI file",
+                        dest="config",
+                        type=argparse.FileType('r'))
+
+    parser.add_argument("output")
+
 
 def export(conn, filename):
     raise NotImplementedError()
@@ -26,5 +44,55 @@ def export(conn, filename):
 
     out.to_csv(filename, index=False)
 
-def main():
-    print("FORMAT")
+def main(arguments):
+    if arguments.config:
+        config = configparser.ConfigParser()
+        config.read_file(arguments.config)
+    else:
+        config = None
+
+    sources = arguments.sources
+
+    # Load configurations into sources before collecting data
+    # This lets the user respond to config errors early
+    sources = [source(config) for source in sources]
+
+    engine = netzero.db.main(arguments)
+    Session = sqlalchemy.orm.sessionmaker(bind=engine)
+
+    sessions = {}
+
+    min_date = datetime.datetime.max
+    max_date = datetime.datetime.min
+    for source in sources:
+        session = Session()
+        sessions[source] = session
+
+        source_min = source.min_date(session)
+        source_max = source.max_date(session)
+
+        min_date = min(min_date, source_min)
+        max_date = max(max_date, source_max)
+
+        print("{}: {} to {}".format(source.name, source_min.isoformat(), source_max.isoformat()))
+
+
+    with open(arguments.output, 'w') as f:
+        writer = csv.writer(f)
+
+        header = ["date"]
+        for source in sources:
+            header.append(source.name)
+
+        writer.writerow(header)
+
+        for date in netzero.util.iter_days(min_date, max_date):
+            netzero.util.print_status("Format", "Exporting: {}".format(date.strftime("%Y-%m-%d")))
+
+            row = [date.strftime("%Y-%m-%d")]
+            for source in sources:
+                row.append(source.value(sessions[source], date))
+            
+            writer.writerow(row)
+
+    netzero.util.print_status("Format", "Exporting Complete")

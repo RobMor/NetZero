@@ -2,7 +2,7 @@ import datetime
 import argparse
 import configparser
 
-from sqlalchemy.orm import sessionmaker
+import sqlalchemy
 
 import netzero.sources
 
@@ -46,7 +46,7 @@ def main(arguments):
     sources = [source(config) for source in sources]
 
     engine = netzero.db.main(arguments)
-    Session = sessionmaker(bind=engine)
+    Session = sqlalchemy.orm.sessionmaker(bind=engine)
 
     for source in sources:
         session = Session()
