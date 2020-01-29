@@ -1,12 +1,10 @@
-import os
 import datetime
 import json
-import time
-import itertools
+import os
 import sqlite3
 
-import requests
 import bs4
+import requests
 
 import netzero.util
 
@@ -18,11 +16,10 @@ class Gshp:
     default_start = datetime.date(2016, 10, 31)
     default_end = datetime.date.today()
 
-
     def __init__(self, config, location="."):
-        netzero.util.validate_config(config,
-                             entry="gshp",
-                             fields=["username", "password"])
+        netzero.util.validate_config(
+            config, entry="gshp", fields=["username", "password"]
+        )
 
         self.username = config["gshp"]["username"]
         self.password = config["gshp"]["password"]
@@ -30,8 +27,9 @@ class Gshp:
         self.conn = sqlite3.connect(os.path.join(location, "gshp.db"))
         self.conn.create_aggregate("WATTAGG", 2, WattHourAgg)
 
-        self.conn.execute("CREATE TABLE IF NOT EXISTS gshp (time TIMESTAMP PRIMARY KEY, watts FLOAT)")
-
+        self.conn.execute(
+            "CREATE TABLE IF NOT EXISTS gshp (time TIMESTAMP PRIMARY KEY, watts FLOAT)"
+        )
 
     def collect(self, start_date=None, end_date=None):
         """Collects raw furnace usage data from the Symphony website.
@@ -58,7 +56,9 @@ class Gshp:
         session = self.establish_session()
 
         for _, day in netzero.util.time_intervals(start_date, end_date, days=1):
-            netzero.util.print_status("GSHP", "Collecting: {}".format(day.strftime("%Y-%m-%d")))
+            netzero.util.print_status(
+                "GSHP", "Collecting: {}".format(day.strftime("%Y-%m-%d"))
+            )
 
             parsed = self.scrape_json(session, day)
 
@@ -84,7 +84,6 @@ class Gshp:
 
         netzero.util.print_status("GSHP", "Complete", newline=True)
 
-
     def establish_session(self) -> requests.Session:
         """Establishes a session with the symphony website 
         
@@ -96,7 +95,7 @@ class Gshp:
             "op": "login",
             "redirect": "/",
             "emailaddress": self.username,
-            "password": self.password
+            "password": self.password,
         }
 
         s = requests.Session()
@@ -108,23 +107,19 @@ class Gshp:
         s.mount("https://", retry_adapter)
 
         # Login to the site
-        p = s.post("https://symphony.mywaterfurnace.com/account/login",
-                   data=payload)
+        p = s.post("https://symphony.mywaterfurnace.com/account/login", data=payload)
 
         # Find the tokens that seem to be necessary for the next few steps
         soup = bs4.BeautifulSoup(p.text, "html.parser")
-        field = soup.find("a", attrs={
-            "title": "AWL Tech View"
-        }).attrs["href"][1:]  # Get everything except the /
+        # Get everything except the /
+        field = soup.find("a", attrs={"title": "AWL Tech View"}).attrs["href"][1:]
 
         # Navigate some more
         # Navigating here allows us to actually collect the data.
         # Necessary in order the query the fetch.php script.
-        s.get("https://symphony.mywaterfurnace.com/dealer/historical-data" +
-              field)
+        s.get("https://symphony.mywaterfurnace.com/dealer/historical-data" + field)
 
         return s
-
 
     def scrape_json(self, session, date):
         """Requests some data for a certain day from the Symphony website.
@@ -150,37 +145,40 @@ class Gshp:
             ]
         Every value in the JSON objects is a string
         """
-        params = {"json": '', "date": date.strftime("%m-%d-%Y")}
+        params = {"json": "", "date": date.strftime("%m-%d-%Y")}
         # Putting the date you want information for after this url returns some
         # json containing all the data for that day.
         # Found with some simple network analysis using browser tools...
-        response = session.get("https://symphony.mywaterfurnace.com/fetch.php",
-                               params=params)
+        response = session.get(
+            "https://symphony.mywaterfurnace.com/fetch.php", params=params
+        )
 
         if response.ok:
             return response.json()
         else:
             return []
 
-
     def min_date(self):
         result = self.conn.execute("SELECT date(min(time)) FROM gshp").fetchone()[0]
 
         return datetime.datetime.strptime(result, "%Y-%m-%d").date()
-
 
     def max_date(self):
         result = self.conn.execute("SELECT date(max(time)) FROM gshp").fetchone()[0]
 
         return datetime.datetime.strptime(result, "%Y-%m-%d").date()
 
-
     def format(self):
         netzero.util.print_status("GSHP", "Querying Database")
 
-        data = self.conn.execute("SELECT date(time), WATTAGG(time, watts) FROM gshp GROUP BY date(time)").fetchall()
+        data = self.conn.execute(
+            "SELECT date(time), WATTAGG(time, watts) FROM gshp GROUP BY date(time)"
+        ).fetchall()
 
-        result = {datetime.datetime.strptime(date, "%Y-%m-%d").date(): value for date, value in data}
+        result = {
+            datetime.datetime.strptime(date, "%Y-%m-%d").date(): value
+            for date, value in data
+        }
 
         netzero.util.print_status("GSHP", "Complete", newline=True)
 
@@ -196,13 +194,13 @@ class WattHourAgg(object):
     The step method handles new entries. Finally the finalize method returns 
     whatever the final result is.
     """
+
     def __init__(self):
         """
         Initialize values
         """
         self.watt_hours = 0
         self.prev_time = None
-
 
     def step(self, time, value):
         """
@@ -222,7 +220,6 @@ class WattHourAgg(object):
         self.watt_hours += kw * h
 
         self.prev_time = time
-
 
     def finalize(self):
         return self.watt_hours

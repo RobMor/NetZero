@@ -36,10 +36,10 @@ Green Button XML Format for Documentation Purposes:
 </feed>
 """
 
-import os
-import json
 import datetime
 import itertools
+import json
+import os
 import sqlite3
 import xml.etree.ElementTree as ETree
 
@@ -62,7 +62,6 @@ class Pepco:
     name = "pepco"
     summary = "Pepco data"
 
-
     def __init__(self, config, location):
         netzero.util.validate_config(config, entry="pepco", fields=["files"])
 
@@ -70,8 +69,9 @@ class Pepco:
 
         self.conn = sqlite3.connect(os.path.join(location, "pepco.db"))
 
-        self.conn.execute("CREATE TABLE IF NOT EXISTS pepco (time TIMESTAMP PRIMARY KEY, watt_hrs FLOAT)")
-
+        self.conn.execute(
+            "CREATE TABLE IF NOT EXISTS pepco (time TIMESTAMP PRIMARY KEY, watt_hrs FLOAT)"
+        )
 
     def collect(self, start_date=None, end_date=None) -> None:
         """Collects data from PEPCO XML files.
@@ -104,18 +104,19 @@ class Pepco:
                 for reading in block.findall(tags["IntervalReading"]):
                     # Read start time and usage in Wh from XML file
                     start = int(
-                        reading.find(tags["timePeriod"]).find(
-                            tags["start"]).text)
+                        reading.find(tags["timePeriod"]).find(tags["start"]).text
+                    )
                     start = datetime.datetime.fromtimestamp(start)
 
                     value = int(reading.find(tags["value"]).text)
 
-                    cur.execute("INSERT OR IGNORE INTO pepco VALUES (?, ?)", (start, value))
-                
+                    cur.execute(
+                        "INSERT OR IGNORE INTO pepco VALUES (?, ?)", (start, value)
+                    )
+
                 self.conn.commit()
 
         cur.close()
-
 
     def concatenate_files(self, files):
         """
@@ -134,25 +135,27 @@ class Pepco:
 
         return entries
 
-
     def min_date(self):
         result = self.conn.execute("SELECT date(min(time)) FROM pepco").fetchone()[0]
 
         return datetime.datetime.strptime(result, "%Y-%m-%d").date()
-
 
     def max_date(self):
         result = self.conn.execute("SELECT date(max(time)) FROM pepco").fetchone()[0]
 
         return datetime.datetime.strptime(result, "%Y-%m-%d").date()
 
-
     def format(self):
         netzero.util.print_status("Pepco", "Querying Database", newline=True)
 
-        data = self.conn.execute("SELECT date(time), SUM(watt_hrs) / 1000 FROM pepco GROUP BY date(time)").fetchall()
+        data = self.conn.execute(
+            "SELECT date(time), SUM(watt_hrs) / 1000 FROM pepco GROUP BY date(time)"
+        ).fetchall()
 
-        result = {datetime.datetime.strptime(date, "%Y-%m-%d").date(): value for date, value in data}
+        result = {
+            datetime.datetime.strptime(date, "%Y-%m-%d").date(): value
+            for date, value in data
+        }
 
         netzero.util.print_status("Pepco", "Complete", newline=True)
 
