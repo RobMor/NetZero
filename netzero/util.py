@@ -30,15 +30,15 @@ def time_intervals(start_date,
 
 
 def iter_days(start_date, end_date):
-    assert isinstance(start_date, datetime.date)
-    assert isinstance(end_date, datetime.date)
+    assert type(start_date) is datetime.date
+    assert type(end_date) is datetime.date
 
     if start_date < end_date:
         delta = datetime.timedelta(days=1)
 
         curr = start_date
         while curr <= end_date:
-            yield curr.date()
+            yield curr
             curr = curr + delta
 
 

@@ -13,7 +13,6 @@ import netzero.util
 
 def add_args(parser):
     netzero.sources.add_args(parser)
-    netzero.db.add_args(parser)
 
     parser.add_argument("-c",
                         required=True,
@@ -51,32 +50,26 @@ def main(arguments):
     else:
         config = None
 
-    sources = arguments.sources
-
     # Load configurations into sources before collecting data
     # This lets the user respond to config errors early
-    sources = [source(config) for source in sources]
-
-    engine = netzero.db.main(arguments)
-    Session = sqlalchemy.orm.sessionmaker(bind=engine)
+    sources = [source(config) for source in arguments.sources]
 
     data = []
 
-    min_date = datetime.datetime.max
-    max_date = datetime.datetime.min
+    min_date = datetime.date.max
+    max_date = datetime.date.min
+
     for source in sources:
-        session = Session()
+        source_min_date = source.min_date()
+        source_max_date = source.max_date()
 
-        source_min = source.min_date(session)
-        source_max = source.max_date(session)
+        if not type(source_min_date) is datetime.date or not type(source_max_date) is datetime.date:
+            raise TypeError("Format was given datetime for min/max date, expected date")
 
-        min_date = min(min_date, source_min)
-        max_date = max(max_date, source_max)
+        min_date = min(min_date, source_min_date)
+        max_date = max(max_date, source_max_date)
 
-        print("{}: {} to {}".format(source.name, source_min.isoformat(), source_max.isoformat()))
-
-        data.append(source.format(session))
-
+        data.append(source.format())
 
     with open(arguments.output, 'w') as f:
         writer = csv.writer(f)

@@ -1,11 +1,9 @@
 import datetime
 import requests
 import json
+import os
+import sqlite3
 
-import sqlalchemy
-from sqlalchemy import Column, Date, Float, String
-
-import netzero.db
 import netzero.util
 
 
@@ -17,7 +15,7 @@ class Weather:
     default_end = datetime.date.today()
 
 
-    def __init__(self, config):
+    def __init__(self, config, location="."):
         netzero.util.validate_config(config,
                              entry="weather",
                              fields=["api_key", "stations"])
@@ -25,8 +23,12 @@ class Weather:
         self.api_key = config["weather"]["api_key"]
         self.stations = json.loads(config["weather"]["stations"])
 
+        self.conn = sqlite3.connect(os.path.join(location, "weather.db"))
 
-    def collect(self, session, start_date=None, end_date=None):
+        self.conn.execute("CREATE TABLE IF NOT EXISTS weather (date DATE, temperature FLOAT, station TEXT, PRIMARY KEY (date, station))")
+
+
+    def collect(self, start_date=None, end_date=None):
         """Collect the raw weather data from NCDC API
 
         Parameters
@@ -41,6 +43,8 @@ class Weather:
         if end_date is None:
             end_date = self.default_end
 
+        cur = self.conn.cursor()
+
         # Maximum return is 1000 entries
         num_days = 1000 // len(self.stations)
         # Maximum date-range is 1 year
@@ -50,7 +54,7 @@ class Weather:
         for interval in netzero.util.time_intervals(start_date,
                                             end_date,
                                             days=num_days):
-            netzero.util.print_status("Weather", "Collecting: {} to {}".format(interval[0].isoformat(), interval[1].isoformat()))
+            netzero.util.print_status("Weather", "Collecting: {} to {}".format(interval[0].strftime("%Y-%m-%d"), interval[1].strftime("%Y-%m-%d")))
 
             # TODO -- REMOVE ASSUMPTION THAT LEN(DATA) < LIMIT
             raw_data = self.query_api(interval[0], interval[1])
@@ -59,22 +63,18 @@ class Weather:
                 print("ERROR QUERYING API")  # TODO exception here?
                 continue
 
-            session.query(WeatherEntry).filter(
-                WeatherEntry.date.between(interval[0], interval[1]) # TODO test boundaries
-            ).delete(synchronize_session=False)
-
             for entry in raw_data.get("results", []):
                 # Insert the weather data to the table, to be averaged later
-                date = datetime.datetime.fromisoformat(entry["date"])
+                date = datetime.datetime.strptime(entry["date"], "%Y-%m-%dT%H:%M:%S").date()
                 value = entry["value"]
                 station = entry["station"]
 
-                new_entry = WeatherEntry(date=date, temperature=value, station=station)
-
-                session.add(new_entry)
+                cur.execute("INSERT INTO weather VALUES (?, ?, ?)", (date, value, station))
             
-            session.commit()
+            self.conn.commit()
 
+        cur.close()
+        
         netzero.util.print_status("Weather", "Complete", newline=True)
 
 
@@ -123,31 +123,25 @@ class Weather:
             return None
 
     
-    def max_date(self, session):
-        return datetime.datetime.combine(session.query(sqlalchemy.func.max(WeatherEntry.date)).scalar(), datetime.datetime.min.time())
+    def min_date(self):
+        result = self.conn.execute("SELECT min(date) FROM weather").fetchone()[0]
 
-    
-    def min_date(self, session):
-        return datetime.datetime.combine(session.query(sqlalchemy.func.min(WeatherEntry.date)).scalar(), datetime.datetime.min.time())
+        return datetime.datetime.strptime(result, "%Y-%m-%d").date()
 
 
-    def format(self, session):
-        data = session.query(
-            WeatherEntry.date,
-            sqlalchemy.func.avg(WeatherEntry.temperature)
-        ).group_by(
-            sqlalchemy.func.strftime("%Y-%m-%d", WeatherEntry.date)
-        ).all()
+    def max_date(self):
+        result = self.conn.execute("SELECT max(date) FROM weather").fetchone()[0]
 
-        # TODO make this print after the return...
+        return datetime.datetime.strptime(result, "%Y-%m-%d").date()
+
+
+    def format(self):
+        netzero.util.print_status("Weather", "Querying Database")
+
+        data = self.conn.execute("SELECT date, AVG(temperature) FROM weather GROUP BY date").fetchall()
+
+        result = {datetime.datetime.strptime(date, "%Y-%m-%d").date(): value for date, value in data}
+
         netzero.util.print_status("Weather", "Complete", newline=True)
 
-        return {date: value for date, value in data}
-
-
-class WeatherEntry(netzero.db.ModelBase):
-    __tablename__ = "weather"
-
-    date = Column(Date, primary_key=True)
-    temperature = Column(Float)
-    station = Column(String, primary_key=True)
+        return result

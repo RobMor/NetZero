@@ -9,7 +9,6 @@ import netzero.sources
 
 def add_args(parser):
     netzero.sources.add_args(parser)
-    netzero.db.add_args(parser)
 
     parser.add_argument("-s",
                         "--start",
@@ -45,10 +44,5 @@ def main(arguments):
     # This lets the user respond to config errors early
     sources = [source(config) for source in sources]
 
-    engine = netzero.db.main(arguments)
-    Session = sqlalchemy.orm.sessionmaker(bind=engine)
-
     for source in sources:
-        session = Session()
-        source.collect(session, arguments.start, arguments.end)
-        session.close()
+        source.collect(arguments.start, arguments.end)

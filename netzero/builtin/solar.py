@@ -7,14 +7,12 @@ data and convert it into a useful daily summation of energy production.
 Solar Edge API documentation (ca 2019):
 https://www.solaredge.com/sites/default/files/se_monitoring_api.pdf
 """
+import os
 import json
+import sqlite3
 import requests
 import datetime
 
-import sqlalchemy
-from sqlalchemy import Column, DateTime, Float
-
-import netzero.db
 import netzero.util
 
 
@@ -26,7 +24,7 @@ class Solar:
     default_end = datetime.date.today()
 
 
-    def __init__(self, config):
+    def __init__(self, config, location="."):
         netzero.util.validate_config(config,
                              entry="solar",
                              fields=["api_key", "site_id"])
@@ -34,8 +32,12 @@ class Solar:
         self.api_key = config["solar"]["api_key"]
         self.site_id = config["solar"]["site_id"]
 
+        self.conn = sqlite3.connect(os.path.join(location, "solaredge.db"))
 
-    def collect(self, session, start_date=None, end_date=None):
+        self.conn.execute("CREATE TABLE IF NOT EXISTS solaredge (time TIMESTAMP PRIMARY KEY, watt_hrs FLOAT)")
+
+
+    def collect(self, start_date=None, end_date=None):
         """Collect raw solar data from SolarEdge
 
         Collects data using the SolarEdge API, storing it in the database.
@@ -52,31 +54,23 @@ class Solar:
         if end_date is None:
             end_date = self.default_end
 
+        cur = self.conn.cursor()
+
         # Iterate through each date range
         for interval in netzero.util.time_intervals(start_date, end_date, days=30):
-            netzero.util.print_status("SolarEdge", "Collecting: {} to {}".format(interval[0].isoformat(), interval[1].isoformat()))
+            netzero.util.print_status("SolarEdge", "Collecting: {} to {}".format(interval[0].strftime("%Y-%m-%d"), interval[1].strftime("%Y-%m-%d")))
 
             result = self.query_api(interval[0], interval[1])
-
-            # Delete all previous entries for this time range
-            # This is faster than merging everything which is what you have to
-            # do because sqlalchemy doesnt support INSERT OR IGNORE.
-            session.query(SolarEdgeEntry).filter(
-                SolarEdgeEntry.time.between(
-                    interval[0], 
-                    interval[1] + datetime.timedelta(days=1),
-                )
-            ).delete(synchronize_session=False)
             
             for entry in result["energy"]["values"]:
-                date = datetime.datetime.fromisoformat(entry["date"])
+                date = datetime.datetime.strptime(entry["date"], "%Y-%m-%d %H:%M:%S")
                 value = entry["value"] or 0
 
-                new_entry = SolarEdgeEntry(time=date, watt_hrs=value)
-
-                session.add(new_entry)
+                cur.execute("INSERT OR IGNORE INTO solaredge VALUES (?, ?)", (date, value))
             
-            session.commit()
+            self.conn.commit()
+        
+        cur.close()
         
         netzero.util.print_status("SolarEdge", "Complete", newline=True)
 
@@ -121,28 +115,26 @@ class Solar:
                             params=payload)
         return json.loads(data.text)
 
+    
+    def min_date(self):
+        result = self.conn.execute("SELECT date(min(time)) FROM solaredge").fetchone()[0]
 
-    def max_date(self, session):
-        return session.query(sqlalchemy.func.max(SolarEdgeEntry.time)).scalar()
-
-
-    def min_date(self, session):
-        return session.query(sqlalchemy.func.min(SolarEdgeEntry.time)).scalar()
+        return datetime.datetime.strptime(result, "%Y-%m-%d").date()
 
 
-    def format(self, session):
-        data = session.query(
-            SolarEdgeEntry.time, sqlalchemy.func.sum(SolarEdgeEntry.watt_hrs) / 1000,
-        ).group_by(sqlalchemy.func.strftime("%Y-%m-%d", SolarEdgeEntry.time)).all()
+    def max_date(self):
+        result = self.conn.execute("SELECT date(max(time)) FROM solaredge").fetchone()[0]
 
-        # TODO make this print after the return
+        return datetime.datetime.strptime(result, "%Y-%m-%d").date()
+
+
+    def format(self):
+        netzero.util.print_status("SolarEdge", "Querying Database")
+
+        data = self.conn.execute("SELECT date(time), SUM(watt_hrs) / 1000 FROM solaredge GROUP BY date(time)").fetchall()
+
+        result = {datetime.datetime.strptime(date, "%Y-%m-%d").date(): value for date, value in data}
+        
         netzero.util.print_status("SolarEdge", "Complete", newline=True)
 
-        return {date.date(): value for date, value in data}
-
-
-class SolarEdgeEntry(netzero.db.ModelBase):
-    __tablename__ = "solaredge"
-
-    time = Column(DateTime, primary_key=True)
-    watt_hrs = Column(Float)
+        return result
