@@ -3,26 +3,28 @@ import json
 import os
 import requests
 import sqlite3
+import math
 
+from netzero.sources import SourceBase
 import netzero.util
 
 
-class Weather:
+class Weather(SourceBase):
     name = "weather"
     summary = "weather data"
 
     default_start = datetime.date(2014, 1, 1)
     default_end = datetime.date.today()
 
-    def __init__(self, config, location="."):
-        netzero.util.validate_config(
-            config, entry="weather", fields=["api_key", "stations"]
+    def __init__(self, config, conn):
+        config = netzero.util.validate_config(
+            config, entry="NCDC", fields=["api_key", "stations"]
         )
 
-        self.api_key = config["weather"]["api_key"]
-        self.stations = json.loads(config["weather"]["stations"])
+        self.api_key = config["api_key"]
+        self.stations = json.loads(config["stations"])
 
-        self.conn = sqlite3.connect(os.path.join(location, "weather.db"))
+        self.conn = conn
 
         self.conn.execute(
             "CREATE TABLE IF NOT EXISTS weather (date DATE, temperature FLOAT, station TEXT, PRIMARY KEY (date, station))"
@@ -51,14 +53,18 @@ class Weather:
         if num_days > 365:
             num_days = 365
 
-        for interval in netzero.util.time_intervals(
+        total = math.ceil((end_date - start_date).days / num_days)
+
+        self.reset_status("Weather (NCDC API)", "Collecting Data", total)
+
+        for i, interval in enumerate(netzero.util.time_intervals(
             start_date, end_date, days=num_days
-        ):
-            netzero.util.print_status(
-                "Weather",
-                "Collecting: {} to {}".format(
+        )):
+            self.set_progress(
+                "{} to {}".format(
                     interval[0].strftime("%Y-%m-%d"), interval[1].strftime("%Y-%m-%d")
                 ),
+                i,
             )
 
             # TODO -- REMOVE ASSUMPTION THAT LEN(DATA) < LIMIT
@@ -77,14 +83,15 @@ class Weather:
                 station = entry["station"]
 
                 cur.execute(
-                    "INSERT INTO weather VALUES (?, ?, ?)", (date, value, station)
+                    "INSERT OR IGNORE INTO weather VALUES (?, ?, ?)", (date, value, station)
                 )
 
             self.conn.commit()
 
         cur.close()
 
-        netzero.util.print_status("Weather", "Complete", newline=True)
+        self.reset_status("Weather (NCDC API)", "Complete", 0)
+        self.finish_progress()
 
     def query_api(self, start_date, end_date):
         """Query the NCDC API for average daily temperature data

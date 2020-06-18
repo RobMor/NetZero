@@ -28,3 +28,17 @@ def add_args(parser):
             action="append_const",
             const=source,
         )
+
+# TODO
+class SourceBase:
+    def reset_status(self, source, description, total):
+        self.progress_bar.reset(total=total)
+        self.progress_bar.set_description(source + " -- " + description)
+        self.progress_bar.refresh()
+
+    def set_progress(self, message, progress):
+        self.progress_bar.update(n=progress)
+        self.progress_bar.set_postfix_str(message)
+
+    def finish_progress(self):
+        self.progress_bar.close()

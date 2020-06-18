@@ -1,4 +1,5 @@
 import datetime
+import threading
 
 
 def time_intervals(
@@ -47,6 +48,7 @@ def iter_days(start_date, end_date):
 
 
 def validate_config(config, entry, fields):
+    entry = "source." + entry
     if entry not in config:
         raise ValueError("'%s' entry not in config" % entry)
 
@@ -54,7 +56,4 @@ def validate_config(config, entry, fields):
         if field not in config[entry]:
             raise ValueError("'%s' field not in '%s' entry" % (field, entry))
 
-
-def print_status(source, message, newline=False):
-    end = "\n" if newline else ""
-    print("\033[2K\r" + source + " -- " + message, end=end)
+    return config[entry]

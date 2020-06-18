@@ -15,7 +15,9 @@ setup(
     long_description=__doc__,
     url="https://github.com/RobMor/NetZero",
     packages=["netzero", "netzero.builtin"],
-    install_requires=["requests", "bs4", "sqlalchemy", "entrypoints"],
+    # TODO move the builtins to their own folders so their requirements can be
+    # kept separate
+    install_requires=["requests", "bs4", "tqdm", "entrypoints"],
     entry_points={
         "console_scripts": ["netzero=netzero.__main__:main"],
         "netzero.sources": [

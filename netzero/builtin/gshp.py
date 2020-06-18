@@ -6,25 +6,26 @@ import sqlite3
 import bs4
 import requests
 
+from netzero.sources import SourceBase
 import netzero.util
 
 
-class Gshp:
+class Gshp(SourceBase):
     name = "gshp"
     summary = "Symphony ground source heat pump data"
 
     default_start = datetime.date(2016, 10, 31)
     default_end = datetime.date.today()
 
-    def __init__(self, config, location="."):
-        netzero.util.validate_config(
-            config, entry="gshp", fields=["username", "password"]
+    def __init__(self, config, conn):
+        config = netzero.util.validate_config(
+            config, entry="GSHP", fields=["username", "password"]
         )
 
-        self.username = config["gshp"]["username"]
-        self.password = config["gshp"]["password"]
+        self.username = config["username"]
+        self.password = config["password"]
 
-        self.conn = sqlite3.connect(os.path.join(location, "gshp.db"))
+        self.conn = conn
         self.conn.create_aggregate("WATTAGG", 2, WattHourAgg)
 
         self.conn.execute(
@@ -51,14 +52,14 @@ class Gshp:
         # Move the start date back one day
         start_date = start_date - datetime.timedelta(days=1)
 
-        netzero.util.print_status("GSHP", "Establishing Session")
-
         session = self.establish_session()
 
-        for _, day in netzero.util.time_intervals(start_date, end_date, days=1):
-            netzero.util.print_status(
-                "GSHP", "Collecting: {}".format(day.strftime("%Y-%m-%d"))
-            )
+        total = (end_date - start_date).days
+
+        self.reset_status("GSHP", "Collecting Data", total)
+
+        for i, (_, day) in enumerate(netzero.util.time_intervals(start_date, end_date, days=1)):
+            self.set_progress(day.strftime("%Y-%m-%d"), i)
 
             parsed = self.scrape_json(session, day)
 
@@ -82,7 +83,7 @@ class Gshp:
         cur.close()
         session.close()
 
-        netzero.util.print_status("GSHP", "Complete", newline=True)
+        self.set_progress("Complete", total)
 
     def establish_session(self) -> requests.Session:
         """Establishes a session with the symphony website 
@@ -90,6 +91,8 @@ class Gshp:
         Establishes a session and logs in using the users credentials.
         Then navigates to the historical data page where we can collect data.
         """
+        self.reset_status("GSHP", "Establishing Session", 2)
+
         # Payload for the request to log in
         payload = {
             "op": "login",
@@ -106,6 +109,8 @@ class Gshp:
         s.mount("http://", retry_adapter)
         s.mount("https://", retry_adapter)
 
+        self.set_progress("Logging In", 0)
+
         # Login to the site
         p = s.post("https://symphony.mywaterfurnace.com/account/login", data=payload)
 
@@ -114,10 +119,14 @@ class Gshp:
         # Get everything except the /
         field = soup.find("a", attrs={"title": "AWL Tech View"}).attrs["href"][1:]
 
+        self.set_progress("Preparing Data", 1)
+
         # Navigate some more
         # Navigating here allows us to actually collect the data.
         # Necessary in order the query the fetch.php script.
         s.get("https://symphony.mywaterfurnace.com/dealer/historical-data" + field)
+
+        self.set_progress("Session Established", 2)
 
         return s
 

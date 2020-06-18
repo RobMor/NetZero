@@ -43,6 +43,7 @@ import os
 import sqlite3
 import xml.etree.ElementTree as ETree
 
+from netzero.sources import SourceBase
 import netzero.util
 
 tags = {
@@ -58,16 +59,16 @@ tags = {
 }
 
 
-class Pepco:
+class Pepco(SourceBase):
     name = "pepco"
     summary = "Pepco data"
 
-    def __init__(self, config, location):
-        netzero.util.validate_config(config, entry="pepco", fields=["files"])
+    def __init__(self, config, conn):
+        conn = netzero.util.validate_config(config, entry="Pepco", fields=["files"])
 
-        self.files = json.loads(config["pepco"]["files"])
+        self.files = json.loads(config["files"])
 
-        self.conn = sqlite3.connect(os.path.join(location, "pepco.db"))
+        self.conn = conn
 
         self.conn.execute(
             "CREATE TABLE IF NOT EXISTS pepco (time TIMESTAMP PRIMARY KEY, watt_hrs FLOAT)"
@@ -146,7 +147,8 @@ class Pepco:
         return datetime.datetime.strptime(result, "%Y-%m-%d").date()
 
     def format(self):
-        netzero.util.print_status("Pepco", "Querying Database", newline=True)
+        self.reset_status("Pepco", "Exporting Data", 1)
+        self.set_progress("Querying Database", 0)
 
         data = self.conn.execute(
             "SELECT date(time), SUM(watt_hrs) / 1000 FROM pepco GROUP BY date(time)"
@@ -157,6 +159,6 @@ class Pepco:
             for date, value in data
         }
 
-        netzero.util.print_status("Pepco", "Complete", newline=True)
+        self.set_progress("Complete", 1)
 
         return result

@@ -12,26 +12,28 @@ import json
 import os
 import requests
 import sqlite3
+import math
 
+from netzero.sources import SourceBase
 import netzero.util
 
 
-class Solar:
+class Solar(SourceBase):
     name = "solaredge"
     summary = "Solar Edge data"
 
     default_start = datetime.date(2016, 1, 27)
     default_end = datetime.date.today()
 
-    def __init__(self, config, location="."):
-        netzero.util.validate_config(
-            config, entry="solar", fields=["api_key", "site_id"]
+    def __init__(self, config, conn):
+        config = netzero.util.validate_config(
+            config, entry="SolarEdge", fields=["api_key", "site_id"]
         )
 
-        self.api_key = config["solar"]["api_key"]
-        self.site_id = config["solar"]["site_id"]
+        self.api_key = config["api_key"]
+        self.site_id = config["site_id"]
 
-        self.conn = sqlite3.connect(os.path.join(location, "solaredge.db"))
+        self.conn = conn
 
         self.conn.execute(
             "CREATE TABLE IF NOT EXISTS solaredge (time TIMESTAMP PRIMARY KEY, watt_hrs FLOAT)"
@@ -56,13 +58,17 @@ class Solar:
 
         cur = self.conn.cursor()
 
+        total = math.ceil((end_date - start_date).days / 30)
+
+        self.reset_status("SolarEdge", "Collecting Data", total)
+
         # Iterate through each date range
-        for interval in netzero.util.time_intervals(start_date, end_date, days=30):
-            netzero.util.print_status(
-                "SolarEdge",
-                "Collecting: {} to {}".format(
+        for i, interval in enumerate(netzero.util.time_intervals(start_date, end_date, days=30)):
+            self.set_progress(
+                "{} to {}".format(
                     interval[0].strftime("%Y-%m-%d"), interval[1].strftime("%Y-%m-%d")
                 ),
+                i,
             )
 
             result = self.query_api(interval[0], interval[1])
@@ -79,7 +85,8 @@ class Solar:
 
         cur.close()
 
-        netzero.util.print_status("SolarEdge", "Complete", newline=True)
+        self.reset_status("Weather (NCDC API)", "Complete", 0)
+        self.finish_progress()
 
     def query_api(self, start_date, end_date):
         """A method to query the Solar Edge api for energy data
