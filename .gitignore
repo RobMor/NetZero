@@ -1,14 +1,8 @@
-# Ignore every dir
-*/
-# Except these
-!netzero/
-!netzero/builtin/
-!tests/
-
 # Ignore development artifacts
 .vscode
 __pycache__
 *.egg-info
+venv/
 
 # Ignore personal configurations
 *.ini
@@ -20,3 +14,7 @@ __pycache__
 
 # Ignore test data files
 *.xml
+
+#Added by cargo
+
+/target
