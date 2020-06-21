@@ -1,21 +1,23 @@
-use std::fs::{create_dir_all, read_to_string, write, OpenOptions};
-use std::io::{ErrorKind, Read};
-use std::path::{Path, PathBuf};
 use std::process::exit;
 
-use clap::{crate_authors, crate_version, App, AppSettings, Arg, ArgGroup, ArgMatches, SubCommand};
+use clap::{crate_authors, crate_version, App, AppSettings, Arg, ArgMatches, SubCommand};
+use crossbeam::thread;
 use time::Date;
 
 mod config;
-mod collect;
-mod web;
+mod mode;
+mod server;
+mod source;
 
-use crate::web::Session;
-use crate::collect::CollectionTask;
 use crate::config::Config;
+use crate::server::Server;
+use crate::source::Source;
 
 fn main() {
-    // TODO discover sources
+    let config = Config::setup().unwrap_or_else(|e| {
+        eprintln!("{}", e);
+        exit(1);
+    });
 
     let matches = App::new("NetZero")
         .version(crate_version!())
@@ -49,6 +51,14 @@ fn main() {
                             Ok(_) => Ok(()),
                             Err(e) => Err(format!("{}", e)),
                         }),
+                )
+                .arg(
+                    Arg::with_name("sources")
+                        .long("sources")
+                        .required(false)
+                        .takes_value(true)
+                        .value_name("SOURCES")
+                        .validator(|s| todo!()),
                 ),
         )
         .subcommand(
@@ -67,43 +77,8 @@ fn main() {
         .subcommand(SubCommand::with_name("uninstall").about("Remove data source plugins"))
         .get_matches();
 
-    let config_dir = dirs::config_dir()
-        .unwrap() // TODO unwrapping here shouldn't cause issues but replace it anyways...
-        .join(Path::new("netzero"));
-
-    if !config_dir.exists() {
-        create_dir_all(&config_dir).unwrap_or_else(|e| match e.kind() {
-            _ => {
-                println!("Could not create config directory: {}", e);
-                exit(1);
-            }
-        });
-    }
-
-    let config_path = config_dir.join(Path::new("config.toml"));
-
-    let config = if !config_path.exists() {
-        let config = Config::default();
-        write(config_path, toml::to_string(&config).unwrap()).unwrap_or_else(|e| {
-            println!("Could not write default config: {}", e);
-            exit(1);
-        });
-        config
-    } else {
-        let contents = read_to_string(config_path).unwrap_or_else(|e| {
-            println!("Could not read configuration file: {}", e);
-            exit(1);
-        });
-        toml::from_str(&contents).unwrap_or_else(|e| {
-            println!("Could not parse configuration file: {}", e);
-            exit(1);
-        })
-    };
-
-    println!("{:?}", config);
-
     match matches.subcommand() {
-        ("", None) => todo!(),
+        ("", None) => launch_server(config, &matches),
         ("collect", Some(sub_matches)) => collect(config, sub_matches),
         ("export", Some(sub_matches)) => todo!(),
         ("list", Some(sub_matches)) => todo!(),
@@ -111,8 +86,8 @@ fn main() {
     }
 }
 
-fn launch(config: Config) {
-    Session::new(config).start();
+fn launch_server(config: Config, matches: &ArgMatches) {
+    Server::new(config).start();
 }
 
 fn collect(config: Config, matches: &ArgMatches) {
@@ -124,5 +99,32 @@ fn collect(config: Config, matches: &ArgMatches) {
         .value_of("end_date")
         .map(|d| Date::parse(d, "%Y-%m-%d").unwrap());
 
-    CollectionTask::new(start_date, end_date, config, mode::Mode::Terminal).start();
+    let sources: Vec<Source> = matches
+        .value_of("sources")
+        .map_or_else(
+            || config.all_sources(),
+            |s| s.split(",").map(|s| config.get_source(s)).collect(),
+        )
+        .unwrap_or_else(|e| {
+            eprintln!("Failed to load sources: {}", e);
+            exit(1);
+        });
+
+    println!("Sources: {:?}", sources);
+
+    thread::scope(|s| {
+        for source in &sources {
+            s.spawn(move |_| {
+                // TODO
+                source.collect(start_date, end_date).unwrap();
+            });
+        }
+    })
+    .unwrap();
+
+    // ...
+    // scroped thread
+    // for plugin in plugins {
+    //     plugin::collect(start_date, end_date)
+    // }
 }
