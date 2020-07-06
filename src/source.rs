@@ -1,11 +1,14 @@
 use std::ffi::OsStr;
 use std::io::{BufRead, BufReader, BufWriter, Lines, Read, Write};
 use std::process::{ChildStdin, ChildStdout, Command, Stdio};
+use std::sync::{Arc, Mutex};
 
 use serde::{Deserialize, Serialize};
+use crossbeam::channel;
 use time::Date;
 
 use crate::config::Manifest;
+use crate::progress::Progress;
 
 enum Purpose {
     Collect,
@@ -46,11 +49,11 @@ impl OutgoingPipe {
         writeln!(self.inner, "{}", message)
             .map_err(|e| format!("Failed to write message: {}", e))?;
 
-        Ok(())
-    }
+        self.inner.flush().map_err(|e| format!("Failed to write message: {}", e))?;
 
-    pub fn flush(&mut self) {
-        self.inner.flush();
+        println!("Sent Message");
+
+        Ok(())
     }
 }
 
@@ -90,11 +93,25 @@ impl Iterator for IncomingPipe {
     }
 }
 
-#[derive(Debug)]
+pub struct WrappedMessage {
+    pub name: String,
+    pub message: IncomingMessage,
+}
+
+impl WrappedMessage {
+    pub fn new(name: String, message: IncomingMessage) -> Self {
+        WrappedMessage {
+            name,
+            message,
+        }
+    }
+}
+
 pub struct Source {
     name: String,
     command: String,
     args: Vec<String>,
+    channel: Option<channel::Sender<WrappedMessage>>,
 }
 
 impl Source {
@@ -103,7 +120,12 @@ impl Source {
             name: manifest.name,
             command: manifest.command,
             args: manifest.args,
+            channel: None,
         }
+    }
+
+    pub fn use_channel(&mut self, channel: channel::Sender<WrappedMessage>) {
+        self.channel = Some(channel);
     }
 
     fn start<I, K, V>(
@@ -125,8 +147,6 @@ impl Source {
         command.stdin(Stdio::piped());
         command.stdout(Stdio::piped());
 
-        println!("Command: {:?}", command);
-
         // TODO Is there some better error handling we can do here?
         let child = command
             .spawn()
@@ -143,7 +163,7 @@ impl Source {
         Ok((IncomingPipe::new(incoming), OutgoingPipe::new(outgoing)))
     }
 
-    pub fn collect(&self, start_date: Option<Date>, end_date: Option<Date>) -> Result<(), String> {
+    pub fn collect(&mut self, start_date: Option<Date>, end_date: Option<Date>) -> Result<(), String> {
         // TODO might be a cleaner way!
         let envs: Vec<(&str, String)> = start_date
             .iter()
@@ -151,39 +171,24 @@ impl Source {
             .chain(end_date.map(|d| ("END_DATE", d.format("%Y-%m-%d"))))
             .collect();
 
-        println!("Environment Variables {:?}", envs);
-
-        let (mut incoming, mut outgoing) = self.start(Purpose::Collect, envs)?;
+        let (incoming, mut outgoing) = self.start(Purpose::Collect, envs)?;
 
         outgoing.send(OutgoingMessage::Start)?;
 
         for message in incoming {
             let message = message?;
 
-            match message {
-                IncomingMessage::Starting => {
-                    todo!()
-                },
-                IncomingMessage::SetMax { value, status } => {
-                    todo!()
-                },
-                IncomingMessage::SetProgress { progress, status } => {
-                    todo!()
-                },
-                IncomingMessage::SetStatus { status } => {
-                    todo!()
-                },
-                IncomingMessage::Reset => {
-                    todo!()
-                },
-                IncomingMessage::Done => {
-                    todo!()
-                },
+            if let Some(channel) = &self.channel {
+                channel.send(WrappedMessage::new(self.name.clone(), message)).map_err(|e| format!("Could not pass on message: {}", e))?;
             }
         }
 
         println!("Done");
 
         Ok(())
+    }
+
+    pub fn get_name(&self) -> String {
+        self.name.clone()
     }
 }

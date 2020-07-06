@@ -1,17 +1,21 @@
 use std::process::exit;
+use std::sync::{Arc, Mutex};
+use std::collections::BTreeMap;
 
 use clap::{crate_authors, crate_version, App, AppSettings, Arg, ArgMatches, SubCommand};
-use crossbeam::thread;
+use crossbeam::{thread, channel};
 use time::Date;
+use console::Term;
 
 mod config;
-mod mode;
 mod server;
+mod progress;
 mod source;
 
 use crate::config::Config;
 use crate::server::Server;
-use crate::source::Source;
+use crate::source::{Source, IncomingMessage};
+use crate::progress::{Progress, TerminalProgress};
 
 fn main() {
     let config = Config::setup().unwrap_or_else(|e| {
@@ -57,8 +61,7 @@ fn main() {
                         .long("sources")
                         .required(false)
                         .takes_value(true)
-                        .value_name("SOURCES")
-                        .validator(|s| todo!()),
+                        .value_name("SOURCES"),
                 ),
         )
         .subcommand(
@@ -80,8 +83,7 @@ fn main() {
     match matches.subcommand() {
         ("", None) => launch_server(config, &matches),
         ("collect", Some(sub_matches)) => collect(config, sub_matches),
-        ("export", Some(sub_matches)) => todo!(),
-        ("list", Some(sub_matches)) => todo!(),
+        ("list", Some(sub_matches)) => list(config, sub_matches),
         _ => todo!(),
     }
 }
@@ -99,7 +101,7 @@ fn collect(config: Config, matches: &ArgMatches) {
         .value_of("end_date")
         .map(|d| Date::parse(d, "%Y-%m-%d").unwrap());
 
-    let sources: Vec<Source> = matches
+    let mut sources: Vec<Source> = matches
         .value_of("sources")
         .map_or_else(
             || config.all_sources(),
@@ -110,21 +112,74 @@ fn collect(config: Config, matches: &ArgMatches) {
             exit(1);
         });
 
-    println!("Sources: {:?}", sources);
+    let term = Term::buffered_stdout();
+    let (send, receive) = channel::unbounded();
+    // Use a BTreeMap so we can iterate through them in a guaranteed consistent order
+    let mut bars = BTreeMap::new();
 
     thread::scope(|s| {
-        for source in &sources {
+
+        for source in &mut sources {
+            bars.insert(source.get_name(), TerminalProgress::new(source.get_name()));
+
+            source.use_channel(send.clone());
+
             s.spawn(move |_| {
                 // TODO
                 source.collect(start_date, end_date).unwrap();
             });
         }
+
+        for msg in receive {
+            if term.is_term() {
+                let name = msg.name;
+                let mut bar = bars.get_mut(&name).unwrap();
+
+                match msg.message {
+                    IncomingMessage::Starting => {
+                        bar.set_status("Starting".to_string());
+                    }
+                    IncomingMessage::SetMax { value, status } => {
+                        bar.set_max(value);
+                        if let Some(s) = status { bar.set_status(s) };
+                    },
+                    IncomingMessage::SetProgress { progress, status } => {
+                        bar.set_progress(progress);
+                        if let Some(s) = status { bar.set_status(s) };
+                    },
+                    IncomingMessage::SetStatus { status } => {
+                        bar.set_status(status);
+                    },
+                    IncomingMessage::Reset => {
+                        bar.reset();
+                    },
+                    IncomingMessage::Done => {
+                        bar.set_status("Done".to_string());
+                    },
+                }
+
+                let (height, width) = term.size();
+
+                term.move_cursor_up(bars.len());
+
+                for (_, bar) in &bars {
+                    term.clear_line().unwrap();
+                    term.write_line(&format!("{:width$}", bar, width = width as usize)).unwrap();
+                }
+
+                term.flush().unwrap();
+            }
+        }
+        
+        if term.is_term() {
+            term.write_line("Done");
+        }
     })
     .unwrap();
+}
 
-    // ...
-    // scroped thread
-    // for plugin in plugins {
-    //     plugin::collect(start_date, end_date)
-    // }
+fn list(config: Config, _matches: &ArgMatches) {
+    for source in config.all_sources().unwrap() {
+        println!("{}", source.get_name());
+    }
 }
