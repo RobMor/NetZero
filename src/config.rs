@@ -20,12 +20,7 @@ struct General {
 }
 
 #[derive(Serialize, Deserialize, Debug)]
-struct Source {
-    manifest: PathBuf,
-}
-
-#[derive(Serialize, Deserialize, Debug)]
-pub struct Manifest {
+pub struct Source {
     pub name: String,
     pub command: String,
     pub args: Vec<String>,
@@ -84,11 +79,11 @@ impl Config {
         Ok(config)
     }
 
-    pub fn all_sources(&self) -> Result<Vec<source::Source>, String> {
+    pub fn all_sources(&self) -> Vec<source::Source> {
         // This is cool!
         self.sources
             .iter()
-            .map(|(k, v)| load_source(k, v))
+            .map(|(k, v)| source::Source::from_config(v))
             .collect()
     }
 
@@ -98,15 +93,6 @@ impl Config {
             .get(source)
             .ok_or_else(|| format!("Unrecognized source name {}", source))?;
 
-        load_source(source, source_config)
+        Ok(source::Source::from_config(source_config))
     }
-}
-
-fn load_source(name: &str, source_config: &Source) -> Result<source::Source, String> {
-    let manifest = read_to_string(&source_config.manifest)
-        .map_err(|e| format!("Could not read manifest for {}: {}", name, e))?;
-    let manifest: Manifest = toml::from_str(&manifest)
-        .map_err(|e| format!("Could not parse manifest for {}: {}", name, e))?;
-
-    Ok(source::Source::from_manifest(manifest))
 }

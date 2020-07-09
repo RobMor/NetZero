@@ -5,17 +5,17 @@ use std::collections::BTreeMap;
 use clap::{crate_authors, crate_version, App, AppSettings, Arg, ArgMatches, SubCommand};
 use crossbeam::{thread, channel};
 use time::Date;
-use console::Term;
 
 mod config;
 mod server;
 mod progress;
 mod source;
+mod protocol;
 
 use crate::config::Config;
 use crate::server::Server;
-use crate::source::{Source, IncomingMessage};
-use crate::progress::{Progress, TerminalProgress};
+use crate::source::Source;
+use crate::progress::TerminalBars;
 
 fn main() {
     let config = Config::setup().unwrap_or_else(|e| {
@@ -104,7 +104,7 @@ fn collect(config: Config, matches: &ArgMatches) {
     let mut sources: Vec<Source> = matches
         .value_of("sources")
         .map_or_else(
-            || config.all_sources(),
+            || Ok(config.all_sources()),
             |s| s.split(",").map(|s| config.get_source(s)).collect(),
         )
         .unwrap_or_else(|e| {
@@ -112,17 +112,13 @@ fn collect(config: Config, matches: &ArgMatches) {
             exit(1);
         });
 
-    let term = Term::buffered_stdout();
-    let (send, receive) = channel::unbounded();
-    // Use a BTreeMap so we can iterate through them in a guaranteed consistent order
-    let mut bars = BTreeMap::new();
-
     thread::scope(|s| {
+        let mut bars = TerminalBars::new();
 
         for source in &mut sources {
-            bars.insert(source.get_name(), TerminalProgress::new(source.get_name()));
+            let bar = bars.new_bar(source.get_name());
 
-            source.use_channel(send.clone());
+            source.use_progress(bar);
 
             s.spawn(move |_| {
                 // TODO
@@ -130,56 +126,13 @@ fn collect(config: Config, matches: &ArgMatches) {
             });
         }
 
-        for msg in receive {
-            if term.is_term() {
-                let name = msg.name;
-                let mut bar = bars.get_mut(&name).unwrap();
-
-                match msg.message {
-                    IncomingMessage::Starting => {
-                        bar.set_status("Starting".to_string());
-                    }
-                    IncomingMessage::SetMax { value, status } => {
-                        bar.set_max(value);
-                        if let Some(s) = status { bar.set_status(s) };
-                    },
-                    IncomingMessage::SetProgress { progress, status } => {
-                        bar.set_progress(progress);
-                        if let Some(s) = status { bar.set_status(s) };
-                    },
-                    IncomingMessage::SetStatus { status } => {
-                        bar.set_status(status);
-                    },
-                    IncomingMessage::Reset => {
-                        bar.reset();
-                    },
-                    IncomingMessage::Done => {
-                        bar.set_status("Done".to_string());
-                    },
-                }
-
-                let (height, width) = term.size();
-
-                term.move_cursor_up(bars.len());
-
-                for (_, bar) in &bars {
-                    term.clear_line().unwrap();
-                    term.write_line(&format!("{:width$}", bar, width = width as usize)).unwrap();
-                }
-
-                term.flush().unwrap();
-            }
-        }
-        
-        if term.is_term() {
-            term.write_line("Done");
-        }
+        bars.print_until_complete();
     })
     .unwrap();
 }
 
 fn list(config: Config, _matches: &ArgMatches) {
-    for source in config.all_sources().unwrap() {
+    for source in config.all_sources() {
         println!("{}", source.get_name());
     }
 }
