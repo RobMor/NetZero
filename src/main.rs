@@ -1,9 +1,7 @@
 use std::process::exit;
-use std::sync::{Arc, Mutex};
-use std::collections::BTreeMap;
 
 use clap::{crate_authors, crate_version, App, AppSettings, Arg, ArgMatches, SubCommand};
-use crossbeam::{thread, channel};
+use crossbeam::thread;
 use time::Date;
 
 mod config;
@@ -88,7 +86,7 @@ fn main() {
     }
 }
 
-fn launch_server(config: Config, matches: &ArgMatches) {
+fn launch_server(config: Config, _matches: &ArgMatches) {
     Server::new(config).start();
 }
 

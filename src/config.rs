@@ -80,10 +80,9 @@ impl Config {
     }
 
     pub fn all_sources(&self) -> Vec<source::Source> {
-        // This is cool!
         self.sources
-            .iter()
-            .map(|(k, v)| source::Source::from_config(v))
+            .values()
+            .map(source::Source::from_config)
             .collect()
     }
 

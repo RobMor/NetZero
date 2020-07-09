@@ -1,6 +1,5 @@
 use std::ffi::OsStr;
-use std::io::{BufRead, BufReader, BufWriter, Lines, Read, Write};
-use std::process::{ChildStdin, ChildStdout, Command, Stdio};
+use std::process::{Command, Stdio};
 use std::sync::{Arc, Mutex};
 
 use time::Date;
@@ -79,8 +78,6 @@ impl Source {
                 progress.handle_message(message);
             }
         }
-
-        println!("Done");
 
         Ok(())
     }
