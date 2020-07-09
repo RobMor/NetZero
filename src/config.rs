@@ -10,8 +10,13 @@ use crate::source;
 #[derive(Serialize, Deserialize, Debug)]
 pub struct Config {
     general: General,
-    #[serde(flatten)] // TODO
-    sources: HashMap<String, Source>,
+
+    #[serde(
+        flatten,
+        deserialize_with = "sources::deserialize",
+        serialize_with = "sources::serialize"
+    )] // TODO
+    sources: Vec<Source>,
 }
 
 #[derive(Serialize, Deserialize, Debug)]
@@ -21,22 +26,22 @@ struct General {
 
 #[derive(Serialize, Deserialize, Debug)]
 pub struct Source {
+    #[serde(skip)]
     pub name: String,
+    pub description: String,
+
+    pub short: String,
+    pub long: String,
+
     pub command: String,
     pub args: Vec<String>,
+
+    #[serde(flatten)]
+    pub rest: HashMap<String, String>,
 }
 
 impl Default for Config {
     fn default() -> Config {
-        // let mut test_map = HashMap::new();
-
-        // test_map.insert("testing".to_string(), Source {
-        //     manifest: PathBuf::from("whatever")
-        // });
-        // test_map.insert("testing2".to_string(), Source {
-        //     manifest: PathBuf::from("whatever2")
-        // });
-
         return Config {
             general: General {
                 // TODO unwrapping here also shouldn't cause any problems but replace it anyways...
@@ -44,7 +49,7 @@ impl Default for Config {
                     .unwrap()
                     .join(PathBuf::from("netzero/data.sqlite3")),
             },
-            sources: HashMap::new(),
+            sources: Vec::new(),
         };
     }
 }
@@ -79,19 +84,77 @@ impl Config {
         Ok(config)
     }
 
+    pub fn raw_sources(&self) -> &Vec<Source> {
+        &self.sources
+    }
+
     pub fn all_sources(&self) -> Vec<source::Source> {
         self.sources
-            .values()
+            .iter()
             .map(source::Source::from_config)
             .collect()
     }
 
-    pub fn get_source(&self, source: &str) -> Result<source::Source, String> {
-        let source_config = self
-            .sources
-            .get(source)
-            .ok_or_else(|| format!("Unrecognized source name {}", source))?;
+    pub fn get_source(&self, name: &str) -> Result<source::Source, String> {
+        for source in &self.sources {
+            if name == source.short || name == source.long {
+                return Ok(source::Source::from_config(source));
+            }
+        }
 
-        Ok(source::Source::from_config(source_config))
+        Err(format!("Source {} not found", name))
+    }
+}
+
+mod sources {
+    use std::fmt;
+
+    use serde::de::{Deserializer, MapAccess, Visitor};
+    use serde::ser::{SerializeMap, Serializer};
+
+    use crate::config::Source;
+
+    pub fn serialize<S>(sources: &Vec<Source>, ser: S) -> Result<S::Ok, S::Error>
+    where
+        S: Serializer,
+    {
+        let mut map = ser.serialize_map(Some(sources.len()))?;
+
+        for source in sources {
+            map.serialize_entry(&source.name, &source)?;
+        }
+
+        map.end()
+    }
+
+    struct SourceVisitor;
+
+    impl<'de> Visitor<'de> for SourceVisitor {
+        type Value = Vec<Source>;
+
+        fn expecting(&self, formatter: &mut fmt::Formatter) -> fmt::Result {
+            formatter.write_str("a map from strings to sources")
+        }
+
+        fn visit_map<M>(self, mut access: M) -> Result<Self::Value, M::Error>
+        where
+            M: MapAccess<'de>,
+        {
+            let mut sources: Vec<Source> = Vec::new();
+
+            while let Some((key, mut value)) = access.next_entry::<String, Source>()? {
+                value.name = key;
+                sources.push(value);
+            }
+
+            Ok(sources)
+        }
+    }
+
+    pub fn deserialize<'de, D>(de: D) -> Result<Vec<Source>, D::Error>
+    where
+        D: Deserializer<'de>,
+    {
+        de.deserialize_map(SourceVisitor)
     }
 }

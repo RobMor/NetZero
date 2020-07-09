@@ -5,8 +5,8 @@ use std::sync::{Arc, Mutex};
 use time::Date;
 
 use crate::config;
-use crate::protocol::{Purpose, Messages};
 use crate::progress::ProgressBar;
+use crate::protocol::{Messages, Purpose};
 
 pub struct Source {
     name: String,
@@ -29,11 +29,7 @@ impl Source {
         self.progress = Some(progress);
     }
 
-    fn start<I, K, V>(
-        &self,
-        purpose: Purpose,
-        envs: I,
-    ) -> Result<Messages, String>
+    fn start<I, K, V>(&self, purpose: Purpose, envs: I) -> Result<Messages, String>
     where
         I: IntoIterator<Item = (K, V)>,
         K: AsRef<OsStr>,
@@ -60,7 +56,11 @@ impl Source {
         Ok(Messages::new(incoming))
     }
 
-    pub fn collect(&mut self, start_date: Option<Date>, end_date: Option<Date>) -> Result<(), String> {
+    pub fn collect(
+        &mut self,
+        start_date: Option<Date>,
+        end_date: Option<Date>,
+    ) -> Result<(), String> {
         // TODO might be a cleaner way!
         let envs: Vec<(&str, String)> = start_date
             .iter()

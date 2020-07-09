@@ -20,22 +20,22 @@ pub trait ProgressBar: Send {
                 if let Some(status) = status {
                     self.set_status(status);
                 }
-            },
+            }
             ProgressMessage::SetProgress { progress, status } => {
                 self.set_progress(progress);
                 if let Some(status) = status {
                     self.set_status(status);
                 }
-            },
+            }
             ProgressMessage::SetStatus { status } => {
                 self.set_status(status);
-            },
+            }
             ProgressMessage::Reset => {
                 self.reset();
-            },
+            }
             ProgressMessage::Done => {
                 self.done();
-            },
+            }
         }
     }
 }
@@ -71,7 +71,11 @@ impl TextBar {
 
         let bar_width = bar_width - frac.len() - 3;
         let bar_size = (bar_width as f64 * (self.progress as f64 / self.max as f64)) as usize;
-        let bar = format!("[{}>{}]", "=".repeat(bar_size), " ".repeat(bar_width - bar_size));
+        let bar = format!(
+            "[{}>{}]",
+            "=".repeat(bar_size),
+            " ".repeat(bar_width - bar_size)
+        );
 
         format!(
             "{:<name_width$} {} {} {:>status_width$}",
@@ -146,7 +150,7 @@ impl TerminalBars {
             let name_width = ((width as f32) * 0.1) as usize;
             let status_width = ((width as f32) * 0.25) as usize;
             let bar_width = width as usize - name_width - status_width - 3;
-            
+
             // TODO is this unwrap safe
             self.term.move_cursor_up(self.bars.len()).unwrap();
 

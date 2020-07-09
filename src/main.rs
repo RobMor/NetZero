@@ -5,15 +5,15 @@ use crossbeam::thread;
 use time::Date;
 
 mod config;
-mod server;
 mod progress;
-mod source;
 mod protocol;
+mod server;
+mod source;
 
 use crate::config::Config;
+use crate::progress::TerminalBars;
 use crate::server::Server;
 use crate::source::Source;
-use crate::progress::TerminalBars;
 
 fn main() {
     let config = Config::setup().unwrap_or_else(|e| {
@@ -130,7 +130,10 @@ fn collect(config: Config, matches: &ArgMatches) {
 }
 
 fn list(config: Config, _matches: &ArgMatches) {
-    for source in config.all_sources() {
-        println!("{}", source.get_name());
+    for source in config.raw_sources() {
+        println!(
+            "{}: {}/{} - {}",
+            source.name, source.short, source.long, source.description
+        );
     }
 }

@@ -4,7 +4,6 @@ use std::process::ChildStdout;
 
 use serde::Deserialize;
 
-
 pub enum Purpose {
     Collect,
     Export,
@@ -22,9 +21,17 @@ impl AsRef<OsStr> for Purpose {
 #[derive(Deserialize, Debug)]
 #[serde(tag = "type")]
 pub enum ProgressMessage {
-    SetMax { max: usize, status: Option<String> },
-    SetProgress { progress: usize, status: Option<String> },
-    SetStatus { status: String },
+    SetMax {
+        max: usize,
+        status: Option<String>,
+    },
+    SetProgress {
+        progress: usize,
+        status: Option<String>,
+    },
+    SetStatus {
+        status: String,
+    },
     Reset,
     Done,
 }
