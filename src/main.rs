@@ -1,7 +1,7 @@
 use std::process::exit;
 
+use tokio::runtime::Runtime;
 use clap::{crate_authors, crate_version, App, AppSettings, Arg, ArgMatches, SubCommand};
-use crossbeam::thread;
 use time::Date;
 
 mod config;
@@ -73,8 +73,10 @@ fn main() {
                     .value_name("FILE"),
             ),
         )
+        .subcommand(SubCommand::with_name("info").about("Get information on the data stored"))
         .subcommand(SubCommand::with_name("list").about("List available data sources"))
         .subcommand(SubCommand::with_name("install").about("Install data source plugins"))
+        .subcommand(SubCommand::with_name("configure").about("Configure data source plugins"))
         .subcommand(SubCommand::with_name("uninstall").about("Remove data source plugins"))
         .get_matches();
 
@@ -99,7 +101,7 @@ fn collect(config: Config, matches: &ArgMatches) {
         .value_of("end_date")
         .map(|d| Date::parse(d, "%Y-%m-%d").unwrap());
 
-    let mut sources: Vec<Source> = matches
+    let sources: Vec<Source> = matches
         .value_of("sources")
         .map_or_else(
             || Ok(config.all_sources()),
@@ -110,29 +112,29 @@ fn collect(config: Config, matches: &ArgMatches) {
             exit(1);
         });
 
-    thread::scope(|s| {
+    let mut rt = Runtime::new().unwrap();
+
+    rt.block_on(async move {
         let mut bars = TerminalBars::new();
 
-        for source in &mut sources {
+        for mut source in sources {
             let bar = bars.new_bar(source.get_name());
 
             source.use_progress(bar);
 
-            s.spawn(move |_| {
-                // TODO
-                source.collect(start_date, end_date).unwrap();
+            tokio::spawn(async move {
+                source.collect(start_date, end_date).await.unwrap()
             });
         }
 
-        bars.print_until_complete();
-    })
-    .unwrap();
+        bars.print_until_complete().await;
+    });
 }
 
 fn list(config: Config, _matches: &ArgMatches) {
     for source in config.raw_sources() {
         println!(
-            "{}: {}/{} - {}",
+            "{}: {} / {} - {}",
             source.name, source.short, source.long, source.description
         );
     }

@@ -1,8 +1,10 @@
+use std::io::{stdout, Write};
 use std::sync::{Arc, Mutex};
-use std::time::Duration;
 
-use console::Term;
-use crossbeam::{channel, select};
+use tokio::stream::StreamExt;
+use tokio::sync::mpsc;
+
+use crossterm::{QueueableCommand, tty::IsTty, cursor, terminal, event};
 
 use crate::protocol::ProgressMessage;
 
@@ -46,7 +48,7 @@ enum TextBarMessage {
 }
 
 pub struct TextBar {
-    channel: channel::Sender<TextBarMessage>,
+    channel: mpsc::UnboundedSender<TextBarMessage>,
 
     name: String,
     progress: usize,
@@ -55,7 +57,7 @@ pub struct TextBar {
 }
 
 impl TextBar {
-    fn new(name: String, channel: channel::Sender<TextBarMessage>) -> TextBar {
+    fn new(name: String, channel: mpsc::UnboundedSender<TextBarMessage>) -> TextBar {
         TextBar {
             channel: channel,
             name: name,
@@ -92,47 +94,50 @@ impl TextBar {
 impl ProgressBar for TextBar {
     fn set_status(&mut self, status: String) {
         self.status = status;
-        self.channel.send(TextBarMessage::Update).unwrap();
+        self.channel.send(TextBarMessage::Update).map_err(|e| e.to_string()).unwrap();
     }
 
     fn set_max(&mut self, value: usize) {
         self.max = value;
-        self.channel.send(TextBarMessage::Update).unwrap();
+        self.channel.send(TextBarMessage::Update).map_err(|e| e.to_string()).unwrap();
     }
 
     fn set_progress(&mut self, value: usize) {
         self.progress = value;
-        self.channel.send(TextBarMessage::Update).unwrap();
+        self.channel.send(TextBarMessage::Update).map_err(|e| e.to_string()).unwrap();
     }
 
     fn done(&mut self) {
-        self.channel.send(TextBarMessage::Done).unwrap();
+        self.channel.send(TextBarMessage::Done).map_err(|e| e.to_string()).unwrap();
     }
 
     fn reset(&mut self) {
         self.progress = 0;
         self.max = 0;
         self.status = "".to_string();
-        self.channel.send(TextBarMessage::Update).unwrap();
+        self.channel.send(TextBarMessage::Update).map_err(|e| e.to_string()).unwrap();
     }
 }
 
+enum TerminalBarMessage {
+    TerminalMessage(crossterm::Result<event::Event>),
+    BarMessage(TextBarMessage),
+}
+
 pub struct TerminalBars {
-    receiver: channel::Receiver<TextBarMessage>,
-    sender: channel::Sender<TextBarMessage>,
-    term: Term,
+    receiver: mpsc::UnboundedReceiver<TextBarMessage>,
+    sender: mpsc::UnboundedSender<TextBarMessage>,
 
     bars: Vec<Arc<Mutex<TextBar>>>,
 }
 
 impl TerminalBars {
     pub fn new() -> Self {
-        let (sender, receiver) = channel::unbounded();
+        let (sender, receiver) = mpsc::unbounded_channel();
 
         TerminalBars {
             receiver,
             sender,
-            term: Term::buffered_stdout(),
             bars: Vec::new(),
         }
     }
@@ -143,43 +148,62 @@ impl TerminalBars {
         bar
     }
 
-    fn print(&self) {
-        if self.term.is_term() {
-            let (_, width) = self.term.size();
+    fn print(bars: &Vec<Arc<Mutex<TextBar>>>) {
+        let mut stdout = stdout();
 
-            let name_width = ((width as f32) * 0.1) as usize;
-            let status_width = ((width as f32) * 0.25) as usize;
-            let bar_width = width as usize - name_width - status_width - 3;
+        if stdout.is_tty() {
+            let (cols, _) = terminal::size().unwrap(); // TODO unwrapping here?
+
+            let name_width = ((cols as f32) * 0.1) as usize;
+            let status_width = ((cols as f32) * 0.25) as usize;
+            let bar_width = cols as usize - name_width - status_width - 3;
 
             // TODO is this unwrap safe
-            self.term.move_cursor_up(self.bars.len()).unwrap();
+            stdout.queue(cursor::MoveUp(bars.len() as u16)).unwrap();
 
-            for handle in &self.bars {
+            for handle in bars {
                 let bar = handle.lock().unwrap();
-                self.term.clear_line().unwrap();
-                self.term
-                    .write_line(&bar.to_string(name_width, bar_width, status_width))
-                    .unwrap();
+                let bar = bar.to_string(name_width, bar_width, status_width);
+
+                stdout.queue(terminal::Clear(terminal::ClearType::CurrentLine)).unwrap();
+                writeln!(stdout, "{}", bar).unwrap();
             }
 
             // TODO is this unwrap safe
-            self.term.flush().unwrap();
+            stdout.flush().unwrap();
         }
     }
 
-    pub fn print_until_complete(&self) {
+    pub async fn print_until_complete(self) {
+        let term_events = event::EventStream::new().map(|e| TerminalBarMessage::TerminalMessage(e));
+        let bar_events = self.receiver.map(|e| TerminalBarMessage::BarMessage(e));
+
+        let mut merged = bar_events.merge(term_events);
+        
         let mut num_done = 0;
 
-        while num_done < self.bars.len() {
-            select! {
-                recv(self.receiver) -> message => {
-                    match message.unwrap() {
-                        TextBarMessage::Update => self.print(),
-                        TextBarMessage::Done => num_done += 1,
+        while let Some(message) = merged.next().await {
+            match message {
+                TerminalBarMessage::BarMessage(m) => {
+                    match m {
+                        TextBarMessage::Update => TerminalBars::print(&self.bars),
+                        TextBarMessage::Done => {
+                            num_done += 1;
+                            if num_done >= self.bars.len() {
+                                break;
+                            }
+                        },
                     }
                 },
-                default(Duration::from_secs(1)) => self.print(),
+                TerminalBarMessage::TerminalMessage(m) => {
+                    match m {
+                        Ok(event::Event::Resize(_, _)) => TerminalBars::print(&self.bars),
+                        Ok(_) => (),
+                        Err(e) => panic!("Somehow the terminal sent us an error: {}", e), // TODO how common is this??
+                    }
+                }
             }
         }
     }
 }
+

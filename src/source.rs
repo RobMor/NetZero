@@ -1,12 +1,14 @@
 use std::ffi::OsStr;
-use std::process::{Command, Stdio};
+use std::process::Stdio;
 use std::sync::{Arc, Mutex};
 
+use tokio::stream::StreamExt;
+use tokio::process::{Command, Child};
 use time::Date;
 
 use crate::config;
 use crate::progress::ProgressBar;
-use crate::protocol::{Messages, Purpose};
+use crate::protocol;
 
 pub struct Source {
     name: String,
@@ -29,7 +31,7 @@ impl Source {
         self.progress = Some(progress);
     }
 
-    fn start<I, K, V>(&self, purpose: Purpose, envs: I) -> Result<Messages, String>
+    fn start<I, K, V>(&self, purpose: protocol::Purpose, envs: I) -> Result<Child, String>
     where
         I: IntoIterator<Item = (K, V)>,
         K: AsRef<OsStr>,
@@ -37,6 +39,7 @@ impl Source {
     {
         let mut command = Command::new(&self.command);
 
+        // TODO kill on drop?
         command.args(&self.args);
         command.env("PURPOSE", purpose);
         command.envs(envs);
@@ -48,29 +51,22 @@ impl Source {
             .spawn()
             .map_err(|e| format!("Failed to start process for {}: {}", self.name, e))?;
 
-        // TODO can we safely unwrap here?
-        let incoming = child
-            .stdout
-            .ok_or_else(|| format!("Failed to create incoming pipe from {}", self.name))?;
-
-        Ok(Messages::new(incoming))
+        Ok(child)
     }
 
-    pub fn collect(
+    pub async fn collect(
         &mut self,
         start_date: Option<Date>,
         end_date: Option<Date>,
     ) -> Result<(), String> {
-        // TODO might be a cleaner way!
-        let envs: Vec<(&str, String)> = start_date
-            .iter()
-            .map(|d| ("START_DATE", d.format("%Y-%m-%d")))
-            .chain(end_date.map(|d| ("END_DATE", d.format("%Y-%m-%d"))))
-            .collect();
+        let start_date = start_date.map(|d| ("START_DATE", d.format("%Y-%m-%d")));
+        let end_date = end_date.map(|d| ("END_DATE", d.format("%Y-%m-%d")));
+        let envs = start_date.into_iter().chain(end_date.into_iter());
 
-        let messages = self.start(Purpose::Collect, envs)?;
+        let child = self.start(protocol::Purpose::Collect, envs)?;
+        let mut messages = protocol::wrap(child.stdout.unwrap());
 
-        for message in messages {
+        while let Some(message) = messages.next().await {
             let message = message?;
 
             if let Some(progress) = &mut self.progress {

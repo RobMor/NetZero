@@ -11,11 +11,7 @@ use crate::source;
 pub struct Config {
     general: General,
 
-    #[serde(
-        flatten,
-        deserialize_with = "sources::deserialize",
-        serialize_with = "sources::serialize"
-    )] // TODO
+    #[serde(flatten, with = "sources")]
     sources: Vec<Source>,
 }
 
@@ -36,6 +32,7 @@ pub struct Source {
     pub command: String,
     pub args: Vec<String>,
 
+    /// Everything else in the source data
     #[serde(flatten)]
     pub rest: HashMap<String, String>,
 }
@@ -106,6 +103,7 @@ impl Config {
     }
 }
 
+// Config source ser/de to store the "name" in the actual source struct.
 mod sources {
     use std::fmt;
 

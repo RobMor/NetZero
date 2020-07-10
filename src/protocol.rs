@@ -1,6 +1,8 @@
 use std::ffi::OsStr;
-use std::io::{BufRead, BufReader, Lines};
-use std::process::ChildStdout;
+
+use tokio::prelude::*;
+use tokio::stream::{Stream, StreamExt};
+use tokio::io::BufReader;
 
 use serde::Deserialize;
 
@@ -36,27 +38,9 @@ pub enum ProgressMessage {
     Done,
 }
 
-pub struct Messages {
-    inner: Lines<BufReader<ChildStdout>>,
-}
-
-impl Messages {
-    pub fn new(incoming: ChildStdout) -> Messages {
-        Messages {
-            inner: BufReader::new(incoming).lines(),
-        }
-    }
-}
-
-impl Iterator for Messages {
-    type Item = Result<ProgressMessage, String>;
-
-    fn next(&mut self) -> Option<Self::Item> {
-        let message = self.inner.next()?;
-        let message = match message {
-            Ok(m) => m,
-            Err(e) => return Some(Err(format!("Failed to read message: {}", e))),
-        };
-        Some(serde_json::from_str(&message).map_err(|e| format!("Failed to parse message: {}", e)))
-    }
+pub fn wrap(stream: impl AsyncRead) -> impl Stream<Item = Result<ProgressMessage, String>> {
+    BufReader::new(stream).lines().map(|l| {
+        l.map_err(|e| e.to_string())
+        .and_then(|v| serde_json::from_str::<ProgressMessage>(&v).map_err(|e| e.to_string()))
+    })
 }

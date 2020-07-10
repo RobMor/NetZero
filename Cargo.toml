@@ -11,5 +11,5 @@ time = "0.2"
 serde = { version = "1.0", features = ["derive"] }
 toml = "0.5"
 serde_json = "1.0"
-crossbeam = "0.7"
-console = "0.11"
+tokio = { version = "0.2", features = ["rt-core", "io-util", "stream", "sync", "process"] }
+crossterm = { version = "0.17", features = ["event-stream"] }
