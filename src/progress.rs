@@ -1,5 +1,6 @@
 use std::io::{stdout, Write};
 use std::sync::{Arc, Mutex};
+use std::fmt;
 
 use tokio::stream::StreamExt;
 use tokio::sync::mpsc;
@@ -8,43 +9,44 @@ use crossterm::{QueueableCommand, tty::IsTty, cursor, terminal, event};
 
 use crate::protocol::ProgressMessage;
 
-pub trait ProgressBar: Send {
-    fn set_status(&mut self, status: String);
-    fn set_max(&mut self, max: usize);
-    fn set_progress(&mut self, progress: usize);
-    fn reset(&mut self);
-    fn done(&mut self);
+pub enum ProgressError {
+    CommunicationError,
+}
 
-    fn handle_message(&mut self, message: ProgressMessage) {
+pub trait ProgressBar: Send {
+    fn set_status(&mut self, status: String) -> Result<(), ProgressError>;
+    fn set_max(&mut self, max: usize) -> Result<(), ProgressError>;
+    fn set_progress(&mut self, progress: usize) -> Result<(), ProgressError>;
+    fn reset(&mut self) -> Result<(), ProgressError>;
+    fn done(&mut self) -> Result<(), ProgressError>;
+
+    fn handle_message(&mut self, message: ProgressMessage) -> Result<(), ProgressError> {
         match message {
             ProgressMessage::SetMax { max, status } => {
-                self.set_max(max);
+                self.set_max(max)?;
                 if let Some(status) = status {
-                    self.set_status(status);
+                    self.set_status(status)?;
                 }
             }
             ProgressMessage::SetProgress { progress, status } => {
-                self.set_progress(progress);
+                self.set_progress(progress)?;
                 if let Some(status) = status {
-                    self.set_status(status);
+                    self.set_status(status)?;
                 }
             }
             ProgressMessage::SetStatus { status } => {
-                self.set_status(status);
+                self.set_status(status)?;
             }
             ProgressMessage::Reset => {
-                self.reset();
+                self.reset()?;
             }
             ProgressMessage::Done => {
-                self.done();
+                self.done()?;
             }
         }
-    }
-}
 
-enum TextBarMessage {
-    Update,
-    Done,
+        Ok(())
+    }
 }
 
 pub struct TextBar {
@@ -54,6 +56,11 @@ pub struct TextBar {
     progress: usize,
     max: usize,
     status: String,
+}
+
+enum TextBarMessage {
+    Update,
+    Done,
 }
 
 impl TextBar {
@@ -66,62 +73,67 @@ impl TextBar {
             status: "".to_string(),
         }
     }
+}
 
-    pub fn to_string(&self, name_width: usize, bar_width: usize, status_width: usize) -> String {
+impl fmt::Display for TextBar {
+    fn fmt(&self, fmt: &mut fmt::Formatter) -> Result<(), fmt::Error> {
         // TODO
-        let frac = format!("{}/{}", self.progress, self.max);
+        let name_width = 15;
+        let bar_width = 50;
+        let frac_width = 11;
+        let status_width = 20;
 
-        let bar_width = bar_width - frac.len() - 3;
-        let bar_size = (bar_width as f64 * (self.progress as f64 / self.max as f64)) as usize;
-        let bar = format!(
-            "[{}>{}]",
-            "=".repeat(bar_size),
-            " ".repeat(bar_width - bar_size)
-        );
+        let bar = if self.progress >= self.max {
+            format!("[{}]", "=".repeat(bar_width - 2))
+        } else {
+            let bar_width = bar_width - 3; // Subtract 3 for the decorations
+            let bar_chars = (bar_width as f64 * ((self.progress as f64) / (self.max as f64))) as usize;
+            format!("[{}>{}]", "=".repeat(bar_chars), " ".repeat(bar_width - bar_chars))
+        };
 
-        format!(
-            "{:<name_width$} {} {} {:>status_width$}",
+        let frac = format!("{:>5}/{:<5}", self.progress, self.max);
+
+        write!(
+            fmt,
+            "{:>name_width$} {:^bar_width$} {:^frac_width$} {:<status_width$}",
             self.name,
             bar,
             frac,
             self.status,
             name_width = name_width,
-            status_width = status_width
+            bar_width = bar_width,
+            frac_width = frac_width,
+            status_width = status_width,
         )
     }
 }
 
 impl ProgressBar for TextBar {
-    fn set_status(&mut self, status: String) {
+    fn set_status(&mut self, status: String) -> Result<(), ProgressError> {
         self.status = status;
-        self.channel.send(TextBarMessage::Update).map_err(|e| e.to_string()).unwrap();
+        self.channel.send(TextBarMessage::Update).map_err(|_| ProgressError::CommunicationError)
     }
 
-    fn set_max(&mut self, value: usize) {
+    fn set_max(&mut self, value: usize) -> Result<(), ProgressError> {
         self.max = value;
-        self.channel.send(TextBarMessage::Update).map_err(|e| e.to_string()).unwrap();
+        self.channel.send(TextBarMessage::Update).map_err(|_| ProgressError::CommunicationError)
     }
 
-    fn set_progress(&mut self, value: usize) {
+    fn set_progress(&mut self, value: usize) -> Result<(), ProgressError> {
         self.progress = value;
-        self.channel.send(TextBarMessage::Update).map_err(|e| e.to_string()).unwrap();
+        self.channel.send(TextBarMessage::Update).map_err(|_| ProgressError::CommunicationError)
     }
 
-    fn done(&mut self) {
-        self.channel.send(TextBarMessage::Done).map_err(|e| e.to_string()).unwrap();
+    fn done(&mut self) -> Result<(), ProgressError> {
+        self.channel.send(TextBarMessage::Done).map_err(|_| ProgressError::CommunicationError)
     }
 
-    fn reset(&mut self) {
+    fn reset(&mut self) -> Result<(), ProgressError> {
         self.progress = 0;
         self.max = 0;
         self.status = "".to_string();
-        self.channel.send(TextBarMessage::Update).map_err(|e| e.to_string()).unwrap();
+        self.channel.send(TextBarMessage::Update).map_err(|_| ProgressError::CommunicationError)
     }
-}
-
-enum TerminalBarMessage {
-    TerminalMessage(crossterm::Result<event::Event>),
-    BarMessage(TextBarMessage),
 }
 
 pub struct TerminalBars {
@@ -148,60 +160,36 @@ impl TerminalBars {
         bar
     }
 
-    fn print(bars: &Vec<Arc<Mutex<TextBar>>>) {
+    fn print(&self) {
         let mut stdout = stdout();
 
         if stdout.is_tty() {
-            let (cols, _) = terminal::size().unwrap(); // TODO unwrapping here?
+            stdout.queue(cursor::MoveUp(self.bars.len() as u16)).expect("Failed to move cursor up");
 
-            let name_width = ((cols as f32) * 0.1) as usize;
-            let status_width = ((cols as f32) * 0.25) as usize;
-            let bar_width = cols as usize - name_width - status_width - 3;
-
-            // TODO is this unwrap safe
-            stdout.queue(cursor::MoveUp(bars.len() as u16)).unwrap();
-
-            for handle in bars {
+            for handle in &self.bars {
+                // TODO do we care about this unwrap?
                 let bar = handle.lock().unwrap();
-                let bar = bar.to_string(name_width, bar_width, status_width);
 
-                stdout.queue(terminal::Clear(terminal::ClearType::CurrentLine)).unwrap();
-                writeln!(stdout, "{}", bar).unwrap();
+                stdout.queue(terminal::Clear(terminal::ClearType::CurrentLine)).expect("Failed to clear the current line");
+                writeln!(stdout, "{}", bar).expect("Failed to draw progress bar");
             }
 
-            // TODO is this unwrap safe
-            stdout.flush().unwrap();
+            stdout.flush().expect("Failed to flush progress bars to stdout");
         }
     }
 
-    pub async fn print_until_complete(self) {
-        let term_events = event::EventStream::new().map(|e| TerminalBarMessage::TerminalMessage(e));
-        let bar_events = self.receiver.map(|e| TerminalBarMessage::BarMessage(e));
-
-        let mut merged = bar_events.merge(term_events);
-        
+    pub async fn print_until_complete(mut self) {
         let mut num_done = 0;
 
-        while let Some(message) = merged.next().await {
+        while let Some(message) = self.receiver.next().await {
             match message {
-                TerminalBarMessage::BarMessage(m) => {
-                    match m {
-                        TextBarMessage::Update => TerminalBars::print(&self.bars),
-                        TextBarMessage::Done => {
-                            num_done += 1;
-                            if num_done >= self.bars.len() {
-                                break;
-                            }
-                        },
+                TextBarMessage::Update => self.print(),
+                TextBarMessage::Done => {
+                    num_done += 1;
+                    if num_done >= self.bars.len() {
+                        break;
                     }
                 },
-                TerminalBarMessage::TerminalMessage(m) => {
-                    match m {
-                        Ok(event::Event::Resize(_, _)) => TerminalBars::print(&self.bars),
-                        Ok(_) => (),
-                        Err(e) => panic!("Somehow the terminal sent us an error: {}", e), // TODO how common is this??
-                    }
-                }
             }
         }
     }

@@ -76,8 +76,6 @@ impl Config {
                 .map_err(|e| format!("Could not parse configuration file: {}", e))?
         };
 
-        println!("{:?}", config);
-
         Ok(config)
     }
 
