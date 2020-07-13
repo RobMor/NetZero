@@ -1,8 +1,9 @@
 use std::process::exit;
 
-use tokio::runtime::Runtime;
 use clap::{crate_authors, crate_version, App, AppSettings, Arg, ArgMatches, SubCommand};
 use time::Date;
+use tokio::runtime::Runtime;
+use tokio::sync::mpsc;
 
 mod config;
 mod progress;
@@ -119,12 +120,10 @@ fn collect(config: Config, matches: &ArgMatches) {
 
         for mut source in sources {
             let bar = bars.new_bar(source.get_name());
-
             source.use_progress(bar);
-
-            tokio::spawn(async move {
-                source.collect(start_date, end_date).await.unwrap()
-            });
+            
+            // TODO do we want to unwrap here or...
+            tokio::spawn(async move { source.collect(start_date, end_date).await.unwrap() });
         }
 
         bars.print_until_complete().await;

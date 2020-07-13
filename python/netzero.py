@@ -48,33 +48,40 @@ class NetZeroApp:
         sys.stdout.flush()
 
     
-    def send_set_max(self, value, status=None):
+    def _send_progress_msg(self, message):
         self._send_msg({
+            "type": "Progress",
+            "message": message,
+        })
+
+    
+    def send_set_max(self, value, status=None):
+        self._send_progress_msg({
             "type": "SetMax",
             "max": int(value),
             "status": str(status) if status is not None else None,
-            })
+        })
 
 
     def send_set_progress(self, progress, status=None):
-        self._send_msg({
+        self._send_progress_msg({
             "type": "SetProgress",
             "progress": int(progress),
             "status": str(status) if status is not None else None,
-            })
+        })
 
 
     def send_set_status(self, status):
-        self._send_msg({
+        self._send_progress_msg({
             "type": "SetStatus",
             "status": str(status),
-            })
+        })
 
 
     def send_reset(self):
-        self._send_msg({
+        self._send_progress_msg({
             "type": "Reset",
-            })
+        })
 
 
 def bs(app, s, e):

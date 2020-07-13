@@ -2,9 +2,9 @@ use std::ffi::OsStr;
 use std::process::Stdio;
 use std::sync::{Arc, Mutex};
 
-use tokio::stream::StreamExt;
-use tokio::process::{Command, Child};
 use time::Date;
+use tokio::process::{Child, Command};
+use tokio::stream::StreamExt;
 
 use crate::config;
 use crate::progress::ProgressBar;
@@ -64,14 +64,27 @@ impl Source {
         let envs = start_date.into_iter().chain(end_date.into_iter());
 
         let child = self.start(protocol::Purpose::Collect, envs)?;
+        self.run(child).await
+    }
+
+    async fn run(&mut self, child: Child) -> Result<(), String> {
         let mut messages = protocol::wrap(child.stdout.unwrap());
 
         while let Some(message) = messages.next().await {
-            let message = message?;
+            let message = message.map_err(|e| e.to_string())?;
 
-            if let Some(progress) = &mut self.progress {
-                let mut progress = progress.lock().unwrap(); // TODO Can we unwrap here?
-                progress.handle_message(message);
+            match message {
+                protocol::Message::Progress { message } => {
+                    if let Some(progress) = &mut self.progress {
+                        let mut progress = progress.lock().unwrap(); // TODO Should we unwrap here?
+                        progress
+                            .handle_message(message)
+                            .map_err(|e| format!("Failed to update progress bar: {}", e))?;
+                    }
+                }
+                protocol::Message::Done => {
+                    break;
+                }
             }
         }
 

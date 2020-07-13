@@ -1,11 +1,11 @@
+use std::fmt;
 use std::io::{stdout, Write};
 use std::sync::{Arc, Mutex};
-use std::fmt;
 
 use tokio::stream::StreamExt;
 use tokio::sync::mpsc;
 
-use crossterm::{QueueableCommand, tty::IsTty, cursor, terminal, event};
+use crossterm::{cursor, event, terminal, tty::IsTty, QueueableCommand};
 
 use crate::protocol::ProgressMessage;
 
@@ -13,12 +13,19 @@ pub enum ProgressError {
     CommunicationError,
 }
 
+impl fmt::Display for ProgressError {
+    fn fmt(&self, fmt: &mut fmt::Formatter) -> Result<(), fmt::Error> {
+        match self {
+            Self::CommunicationError => write!(fmt, "Failed to communicate with progress bar"),
+        }
+    }
+}
+
 pub trait ProgressBar: Send {
     fn set_status(&mut self, status: String) -> Result<(), ProgressError>;
     fn set_max(&mut self, max: usize) -> Result<(), ProgressError>;
     fn set_progress(&mut self, progress: usize) -> Result<(), ProgressError>;
     fn reset(&mut self) -> Result<(), ProgressError>;
-    fn done(&mut self) -> Result<(), ProgressError>;
 
     fn handle_message(&mut self, message: ProgressMessage) -> Result<(), ProgressError> {
         match message {
@@ -39,9 +46,6 @@ pub trait ProgressBar: Send {
             }
             ProgressMessage::Reset => {
                 self.reset()?;
-            }
-            ProgressMessage::Done => {
-                self.done()?;
             }
         }
 
@@ -87,8 +91,13 @@ impl fmt::Display for TextBar {
             format!("[{}]", "=".repeat(bar_width - 2))
         } else {
             let bar_width = bar_width - 3; // Subtract 3 for the decorations
-            let bar_chars = (bar_width as f64 * ((self.progress as f64) / (self.max as f64))) as usize;
-            format!("[{}>{}]", "=".repeat(bar_chars), " ".repeat(bar_width - bar_chars))
+            let bar_chars =
+                (bar_width as f64 * ((self.progress as f64) / (self.max as f64))) as usize;
+            format!(
+                "[{}>{}]",
+                "=".repeat(bar_chars),
+                " ".repeat(bar_width - bar_chars)
+            )
         };
 
         let frac = format!("{:>5}/{:<5}", self.progress, self.max);
@@ -111,28 +120,32 @@ impl fmt::Display for TextBar {
 impl ProgressBar for TextBar {
     fn set_status(&mut self, status: String) -> Result<(), ProgressError> {
         self.status = status;
-        self.channel.send(TextBarMessage::Update).map_err(|_| ProgressError::CommunicationError)
+        self.channel
+            .send(TextBarMessage::Update)
+            .map_err(|_| ProgressError::CommunicationError)
     }
 
     fn set_max(&mut self, value: usize) -> Result<(), ProgressError> {
         self.max = value;
-        self.channel.send(TextBarMessage::Update).map_err(|_| ProgressError::CommunicationError)
+        self.channel
+            .send(TextBarMessage::Update)
+            .map_err(|_| ProgressError::CommunicationError)
     }
 
     fn set_progress(&mut self, value: usize) -> Result<(), ProgressError> {
         self.progress = value;
-        self.channel.send(TextBarMessage::Update).map_err(|_| ProgressError::CommunicationError)
-    }
-
-    fn done(&mut self) -> Result<(), ProgressError> {
-        self.channel.send(TextBarMessage::Done).map_err(|_| ProgressError::CommunicationError)
+        self.channel
+            .send(TextBarMessage::Update)
+            .map_err(|_| ProgressError::CommunicationError)
     }
 
     fn reset(&mut self) -> Result<(), ProgressError> {
         self.progress = 0;
         self.max = 0;
         self.status = "".to_string();
-        self.channel.send(TextBarMessage::Update).map_err(|_| ProgressError::CommunicationError)
+        self.channel
+            .send(TextBarMessage::Update)
+            .map_err(|_| ProgressError::CommunicationError)
     }
 }
 
@@ -164,17 +177,23 @@ impl TerminalBars {
         let mut stdout = stdout();
 
         if stdout.is_tty() {
-            stdout.queue(cursor::MoveUp(self.bars.len() as u16)).expect("Failed to move cursor up");
+            stdout
+                .queue(cursor::MoveUp(self.bars.len() as u16))
+                .expect("Failed to move cursor up");
 
             for handle in &self.bars {
                 // TODO do we care about this unwrap?
                 let bar = handle.lock().unwrap();
 
-                stdout.queue(terminal::Clear(terminal::ClearType::CurrentLine)).expect("Failed to clear the current line");
+                stdout
+                    .queue(terminal::Clear(terminal::ClearType::CurrentLine))
+                    .expect("Failed to clear the current line");
                 writeln!(stdout, "{}", bar).expect("Failed to draw progress bar");
             }
 
-            stdout.flush().expect("Failed to flush progress bars to stdout");
+            stdout
+                .flush()
+                .expect("Failed to flush progress bars to stdout");
         }
     }
 
@@ -189,9 +208,8 @@ impl TerminalBars {
                     if num_done >= self.bars.len() {
                         break;
                     }
-                },
+                }
             }
         }
     }
 }
-
