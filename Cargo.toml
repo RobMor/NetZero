@@ -12,4 +12,5 @@ serde = { version = "1.0", features = ["derive"] }
 toml = "0.5"
 serde_json = "1.0"
 tokio = { version = "0.2", features = ["rt-core", "io-util", "stream", "sync", "process"] }
+futures = "0.3"
 crossterm = { version = "0.17", features = ["event-stream"] }

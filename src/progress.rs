@@ -1,6 +1,6 @@
 use std::fmt;
 use std::io::{stdout, Write};
-use std::sync::{Arc, Mutex};
+use std::sync::{Arc, Weak, Mutex};
 
 use tokio::stream::StreamExt;
 use tokio::sync::mpsc;
@@ -22,55 +22,51 @@ impl fmt::Display for ProgressError {
 }
 
 pub trait ProgressBar: Send {
-    fn set_status(&mut self, status: String) -> Result<(), ProgressError>;
+    fn set_status(&mut self, status: String)-> Result<(), ProgressError>;
     fn set_max(&mut self, max: usize) -> Result<(), ProgressError>;
     fn set_progress(&mut self, progress: usize) -> Result<(), ProgressError>;
     fn reset(&mut self) -> Result<(), ProgressError>;
 
+    fn flush(&mut self) -> Result<(), ProgressError>;
+
     fn handle_message(&mut self, message: ProgressMessage) -> Result<(), ProgressError> {
         match message {
             ProgressMessage::SetMax { max, status } => {
-                self.set_max(max)?;
+                self.set_max(max);
                 if let Some(status) = status {
-                    self.set_status(status)?;
+                    self.set_status(status);
                 }
             }
             ProgressMessage::SetProgress { progress, status } => {
-                self.set_progress(progress)?;
+                self.set_progress(progress);
                 if let Some(status) = status {
-                    self.set_status(status)?;
+                    self.set_status(status);
                 }
             }
             ProgressMessage::SetStatus { status } => {
-                self.set_status(status)?;
+                self.set_status(status);
             }
             ProgressMessage::Reset => {
-                self.reset()?;
+                self.reset();
             }
         }
+
+        self.flush();
 
         Ok(())
     }
 }
 
-pub struct TextBar {
-    channel: mpsc::UnboundedSender<TextBarMessage>,
-
+struct TextBar {
     name: String,
     progress: usize,
     max: usize,
     status: String,
 }
 
-enum TextBarMessage {
-    Update,
-    Done,
-}
-
 impl TextBar {
-    fn new(name: String, channel: mpsc::UnboundedSender<TextBarMessage>) -> TextBar {
+    pub fn new(name: String) -> TextBar {
         TextBar {
-            channel: channel,
             name: name,
             progress: 0,
             max: 0,
@@ -117,62 +113,101 @@ impl fmt::Display for TextBar {
     }
 }
 
-impl ProgressBar for TextBar {
-    fn set_status(&mut self, status: String) -> Result<(), ProgressError> {
-        self.status = status;
-        self.channel
-            .send(TextBarMessage::Update)
-            .map_err(|_| ProgressError::CommunicationError)
-    }
+pub struct TextBarHandle {
+    channel: mpsc::UnboundedSender<TextBarMessage>,
+    bar: Arc<Mutex<TextBar>>,
+}
 
-    fn set_max(&mut self, value: usize) -> Result<(), ProgressError> {
-        self.max = value;
-        self.channel
-            .send(TextBarMessage::Update)
-            .map_err(|_| ProgressError::CommunicationError)
-    }
+#[derive(Debug)]
+enum TextBarMessage {
+    Update,
+    Done,
+}
 
-    fn set_progress(&mut self, value: usize) -> Result<(), ProgressError> {
-        self.progress = value;
-        self.channel
-            .send(TextBarMessage::Update)
-            .map_err(|_| ProgressError::CommunicationError)
-    }
-
-    fn reset(&mut self) -> Result<(), ProgressError> {
-        self.progress = 0;
-        self.max = 0;
-        self.status = "".to_string();
-        self.channel
-            .send(TextBarMessage::Update)
-            .map_err(|_| ProgressError::CommunicationError)
+impl TextBarHandle {
+    fn new(name: String, channel: mpsc::UnboundedSender<TextBarMessage>) -> TextBarHandle {
+        TextBarHandle {
+            channel: channel,
+            bar: Arc::new(Mutex::new(TextBar::new(name))),
+        }
     }
 }
 
-pub struct TerminalBars {
+impl ProgressBar for TextBarHandle {
+    fn set_status(&mut self, status: String) -> Result<(), ProgressError> {
+        let mut bar = self.bar.lock().unwrap();
+        bar.status = status;
+
+        Ok(())
+    }
+
+    fn set_max(&mut self, value: usize) -> Result<(), ProgressError> {
+        let mut bar = self.bar.lock().unwrap();
+        bar.max = value;
+
+        Ok(())
+    }
+
+    fn set_progress(&mut self, value: usize) -> Result<(), ProgressError> {
+        let mut bar = self.bar.lock().unwrap();
+        bar.progress = value;
+
+        Ok(())
+    }
+
+    fn reset(&mut self) -> Result<(), ProgressError> {
+        let mut bar = self.bar.lock().unwrap();
+        bar.progress = 0;
+        bar.max = 0;
+        bar.status = "".to_string();
+
+        Ok(())
+    }
+
+    fn flush(&mut self) -> Result<(), ProgressError> {
+        self.channel.send(TextBarMessage::Update).map_err(|_| ProgressError::CommunicationError)
+    }
+}
+
+pub struct TerminalBarsBuilder {
     receiver: mpsc::UnboundedReceiver<TextBarMessage>,
     sender: mpsc::UnboundedSender<TextBarMessage>,
 
     bars: Vec<Arc<Mutex<TextBar>>>,
 }
 
-impl TerminalBars {
+impl TerminalBarsBuilder {
     pub fn new() -> Self {
         let (sender, receiver) = mpsc::unbounded_channel();
 
-        TerminalBars {
+        TerminalBarsBuilder {
             receiver,
             sender,
             bars: Vec::new(),
         }
     }
 
-    pub fn new_bar(&mut self, name: String) -> Arc<Mutex<TextBar>> {
-        let bar = Arc::new(Mutex::new(TextBar::new(name, self.sender.clone())));
-        self.bars.push(bar.clone());
-        bar
+    pub fn add_bar(&mut self, name: String) -> TextBarHandle {
+        let handle = TextBarHandle::new(name, self.sender.clone());
+        let bar = handle.bar.clone();
+        self.bars.push(bar);
+        handle
     }
 
+    pub fn build(self) -> TerminalBars {
+        TerminalBars {
+            receiver: self.receiver,
+            bars: self.bars,
+        }
+    }
+}
+
+pub struct TerminalBars {
+    receiver: mpsc::UnboundedReceiver<TextBarMessage>,
+    bars: Vec<Arc<Mutex<TextBar>>>,
+}
+
+impl TerminalBars {
     fn print(&self) {
         let mut stdout = stdout();
 
@@ -197,10 +232,11 @@ impl TerminalBars {
         }
     }
 
-    pub async fn print_until_complete(mut self) {
+    pub async fn run(mut self) {
         let mut num_done = 0;
 
         while let Some(message) = self.receiver.next().await {
+            println!("Got message: {:?}\n\n", message);
             match message {
                 TextBarMessage::Update => self.print(),
                 TextBarMessage::Done => {

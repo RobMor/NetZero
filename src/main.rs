@@ -3,7 +3,7 @@ use std::process::exit;
 use clap::{crate_authors, crate_version, App, AppSettings, Arg, ArgMatches, SubCommand};
 use time::Date;
 use tokio::runtime::Runtime;
-use tokio::sync::mpsc;
+use futures::future;
 
 mod config;
 mod progress;
@@ -12,7 +12,7 @@ mod server;
 mod source;
 
 use crate::config::Config;
-use crate::progress::TerminalBars;
+use crate::progress::TerminalBarsBuilder;
 use crate::server::Server;
 use crate::source::Source;
 
@@ -116,17 +116,24 @@ fn collect(config: Config, matches: &ArgMatches) {
     let mut rt = Runtime::new().unwrap();
 
     rt.block_on(async move {
-        let mut bars = TerminalBars::new();
+        let mut handles = Vec::new();
+        let mut bars = TerminalBarsBuilder::new();
 
         for mut source in sources {
-            let bar = bars.new_bar(source.get_name());
-            source.use_progress(bar);
+            let bar = bars.add_bar(source.get_name());
+            source.use_progress(Box::new(bar));
             
             // TODO do we want to unwrap here or...
-            tokio::spawn(async move { source.collect(start_date, end_date).await.unwrap() });
+            let handle = tokio::spawn(async move {
+                source.collect(start_date, end_date).await.unwrap();
+                println!("Returning??");
+            });
+            handles.push(handle);
         }
 
-        bars.print_until_complete().await;
+        let bars = bars.build();
+
+        future::join(bars.run(), future::join_all(handles)).await;
     });
 }
 

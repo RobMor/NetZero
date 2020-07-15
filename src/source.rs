@@ -14,7 +14,7 @@ pub struct Source {
     name: String,
     command: String,
     args: Vec<String>,
-    progress: Option<Arc<Mutex<dyn ProgressBar>>>,
+    progress: Option<Box<dyn ProgressBar>>,
 }
 
 impl Source {
@@ -27,7 +27,7 @@ impl Source {
         }
     }
 
-    pub fn use_progress(&mut self, progress: Arc<Mutex<dyn ProgressBar>>) {
+    pub fn use_progress(&mut self, progress: Box<dyn ProgressBar>) {
         self.progress = Some(progress);
     }
 
@@ -76,7 +76,7 @@ impl Source {
             match message {
                 protocol::Message::Progress { message } => {
                     if let Some(progress) = &mut self.progress {
-                        let mut progress = progress.lock().unwrap(); // TODO Should we unwrap here?
+                        println!("Sending Message: {:?}", message);
                         progress
                             .handle_message(message)
                             .map_err(|e| format!("Failed to update progress bar: {}", e))?;
