@@ -16,7 +16,7 @@ class Gshp:
     default_start = datetime.date(2016, 10, 31)
     default_end = datetime.date.today()
 
-    def __init__(self, config, location="."):
+    def __init__(self, config, database):
         netzero.util.validate_config(
             config, entry="gshp", fields=["username", "password"]
         )
@@ -24,7 +24,7 @@ class Gshp:
         self.username = config["gshp"]["username"]
         self.password = config["gshp"]["password"]
 
-        self.conn = sqlite3.connect(os.path.join(location, "gshp.db"))
+        self.conn = sqlite3.connect(database)
         self.conn.create_aggregate("WATTAGG", 2, WattHourAgg)
 
         self.conn.execute(
@@ -48,26 +48,16 @@ class Gshp:
 
         cur = self.conn.cursor()
 
-        # Move the start date back one day
-        start_date = start_date - datetime.timedelta(days=1)
-
         netzero.util.print_status("GSHP", "Establishing Session")
 
         session = self.establish_session()
 
-        for _, day in netzero.util.time_intervals(start_date, end_date, days=1):
+        for day in netzero.util.iter_days(start_date, end_date):
             netzero.util.print_status(
                 "GSHP", "Collecting: {}".format(day.strftime("%Y-%m-%d"))
             )
 
             parsed = self.scrape_json(session, day)
-
-            if len(parsed) > 0:
-                start = datetime.datetime.fromtimestamp(int(parsed[0]["1"]))
-                end = datetime.datetime.fromtimestamp(int(parsed[-1]["1"]))
-            else:
-                start = day
-                end = day
 
             for row in parsed:
                 time = int(row["1"])  # Unix timestamp
@@ -161,28 +151,44 @@ class Gshp:
     def min_date(self):
         result = self.conn.execute("SELECT date(min(time)) FROM gshp").fetchone()[0]
 
-        return datetime.datetime.strptime(result, "%Y-%m-%d").date()
+        if result is None:
+            return None
+        else:
+            return datetime.datetime.strptime(result, "%Y-%m-%d").date()
 
     def max_date(self):
         result = self.conn.execute("SELECT date(max(time)) FROM gshp").fetchone()[0]
 
-        return datetime.datetime.strptime(result, "%Y-%m-%d").date()
+        if result is None:
+            return None
+        else:
+            return datetime.datetime.strptime(result, "%Y-%m-%d").date()
 
-    def format(self):
+    def format(self, start_date, end_date):
         netzero.util.print_status("GSHP", "Querying Database")
 
         data = self.conn.execute(
-            "SELECT date(time), WATTAGG(time, watts) FROM gshp GROUP BY date(time)"
-        ).fetchall()
-
-        result = {
-            datetime.datetime.strptime(date, "%Y-%m-%d").date(): value
-            for date, value in data
-        }
+            """
+            WITH RECURSIVE
+                range(d) AS (
+                    SELECT date(?)
+                    UNION ALL
+                    SELECT date(d, '+1 day')
+                    FROM range
+                    WHERE range.d <= date(?)
+                ),
+                data(d, v) AS (
+                    SELECT date(time), WATTAGG(time, watts)
+                    FROM gshp
+                    GROUP BY date(time)
+                )
+            SELECT v FROM range NATURAL LEFT JOIN data""",
+            (start_date, end_date)
+        )
 
         netzero.util.print_status("GSHP", "Complete", newline=True)
 
-        return result
+        return data
 
 
 # TODO -- Deal with missing data. Hours at a time may be unaccounted for!!!

@@ -14,7 +14,7 @@ class Weather:
     default_start = datetime.date(2014, 1, 1)
     default_end = datetime.date.today()
 
-    def __init__(self, config, location="."):
+    def __init__(self, config, database):
         netzero.util.validate_config(
             config, entry="weather", fields=["api_key", "stations"]
         )
@@ -22,7 +22,7 @@ class Weather:
         self.api_key = config["weather"]["api_key"]
         self.stations = json.loads(config["weather"]["stations"])
 
-        self.conn = sqlite3.connect(os.path.join(location, "weather.db"))
+        self.conn = sqlite3.connect(database)
 
         self.conn.execute(
             "CREATE TABLE IF NOT EXISTS weather (date DATE, temperature FLOAT, station TEXT, PRIMARY KEY (date, station))"
@@ -134,25 +134,41 @@ class Weather:
     def min_date(self):
         result = self.conn.execute("SELECT min(date) FROM weather").fetchone()[0]
 
-        return datetime.datetime.strptime(result, "%Y-%m-%d").date()
+        if result is None:
+            return None
+        else:
+            return datetime.datetime.strptime(result, "%Y-%m-%d").date()
 
     def max_date(self):
         result = self.conn.execute("SELECT max(date) FROM weather").fetchone()[0]
 
-        return datetime.datetime.strptime(result, "%Y-%m-%d").date()
+        if result is None:
+            return None
+        else:
+            return datetime.datetime.strptime(result, "%Y-%m-%d").date()
 
-    def format(self):
+    def format(self, start_date, end_date):
         netzero.util.print_status("Weather", "Querying Database")
 
         data = self.conn.execute(
-            "SELECT date, AVG(temperature) FROM weather GROUP BY date"
-        ).fetchall()
-
-        result = {
-            datetime.datetime.strptime(date, "%Y-%m-%d").date(): value
-            for date, value in data
-        }
+            """
+            WITH RECURSIVE
+                range(d) AS (
+                    SELECT date(?)
+                    UNION ALL
+                    SELECT date(d, '+1 day')
+                    FROM range
+                    WHERE range.d <= date(?)
+                ),
+                data(d, v) AS (
+                    SELECT date, AVG(temperature)
+                    FROM weather
+                    GROUP BY date
+                )
+            SELECT v FROM range NATURAL LEFT JOIN data""",
+            (start_date, end_date)
+        )
 
         netzero.util.print_status("Weather", "Complete", newline=True)
 
-        return result
+        return data

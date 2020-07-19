@@ -1,12 +1,15 @@
 import argparse
-import configparser
 import datetime
 
 import netzero.sources
+import netzero.db
+import netzero.config
 
 
 def add_args(parser):
     netzero.sources.add_args(parser)
+    netzero.db.add_args(parser)
+    netzero.config.add_args(parser)
 
     parser.add_argument(
         "-s",
@@ -25,28 +28,15 @@ def add_args(parser):
         type=datetime.date.fromisoformat,
     )
 
-    parser.add_argument(
-        "-c",
-        required=True,
-        metavar="config",
-        help="loads inputs from the specified INI file",
-        dest="config",
-        type=argparse.FileType("r"),
-    )
-
 
 def main(arguments):
-    if arguments.config:
-        config = configparser.ConfigParser()
-        config.read_file(arguments.config)
-    else:
-        config = None
+    config = netzero.config.load_config(arguments.config)
 
     sources = arguments.sources
 
     # Load configurations into sources before collecting data
     # This lets the user respond to config errors early
-    sources = [source(config) for source in sources]
+    sources = [source(config, arguments.database) for source in sources]
 
     for source in sources:
         source.collect(arguments.start, arguments.end)

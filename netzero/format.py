@@ -1,74 +1,62 @@
 import argparse
-import configparser
 import csv
 import datetime
 
 import netzero.sources
+import netzero.db
 import netzero.util
 
 
 def add_args(parser):
     netzero.sources.add_args(parser)
+    netzero.db.add_args(parser)
+    netzero.config.add_args(parser)
 
     parser.add_argument(
-        "-c",
-        required=True,
-        metavar="config",
-        help="loads inputs from the specified INI file",
-        dest="config",
-        type=argparse.FileType("r"),
+        "-s",
+        "--start",
+        metavar="YYYY-MM-DD",
+        help="start date for date range",
+        dest="start",
+        type=datetime.date.fromisoformat,
+    )
+    parser.add_argument(
+        "-e",
+        "--end",
+        metavar="YYYY-MM-DD",
+        help="end date for date range",
+        dest="end",
+        type=datetime.date.fromisoformat,
     )
 
-    parser.add_argument("output")
-
-
-def export(conn, filename):
-    raise NotImplementedError()
-    # Using pandas for the OUTER JOIN functionality
-    pepco = pd.read_sql_query("SELECT day, value AS pepco FROM pepco_day", conn)
-    solar = pd.read_sql_query("SELECT day, value AS solar FROM solar_day", conn)
-    gshp = pd.read_sql_query("SELECT day, value AS gshp FROM gshp_day", conn)
-    weather = pd.read_sql_query("SELECT day, value AS weather FROM weather_day", conn)
-
-    out = (
-        pepco.merge(solar, how="outer", on="day")
-        .merge(gshp, how="outer", on="day")
-        .merge(weather, how="outer", on="day")
-    )
-
-    out.to_csv(filename, index=False)
-
+    parser.add_argument("output", help="the file in which to export data to")
 
 def main(arguments):
-    if arguments.config:
-        config = configparser.ConfigParser()
-        config.read_file(arguments.config)
-    else:
-        config = None
+    config = netzero.config.load_config(arguments.config)
+
+    if not hasattr(arguments, "sources") or arguments.sources is None:
+        print("No sources specified, nothing to export")
+        return
 
     # Load configurations into sources before collecting data
     # This lets the user respond to config errors early
-    sources = [source(config) for source in arguments.sources]
+    sources = [source(config, arguments.database) for source in arguments.sources]
 
     data = []
 
-    min_date = datetime.date.max
-    max_date = datetime.date.min
+    start_date = arguments.start
+    end_date = arguments.end
+
+    # TODO what if all min/max dates return none?
+
+    if start_date is None:
+        start_date = min([source.min_date() for source in sources])
+
+    if end_date is None:
+        end_date = max([source.max_date() for source in sources])
 
     for source in sources:
-        source_min_date = source.min_date()
-        source_max_date = source.max_date()
-
-        if (
-            not type(source_min_date) is datetime.date
-            or not type(source_max_date) is datetime.date
-        ):
-            raise TypeError("Format was given datetime for min/max date, expected date")
-
-        min_date = min(min_date, source_min_date)
-        max_date = max(max_date, source_max_date)
-
-        data.append(source.format())
+        data.append(source.format(start_date, end_date))
 
     with open(arguments.output, "w") as f:
         writer = csv.writer(f)
@@ -79,14 +67,14 @@ def main(arguments):
 
         writer.writerow(header)
 
-        for date in netzero.util.iter_days(min_date, max_date):
+        for date in netzero.util.iter_days(start_date, end_date):
             netzero.util.print_status(
                 "Format", "Exporting: {}".format(date.strftime("%Y-%m-%d"))
             )
 
             row = [date.strftime("%Y-%m-%d")]
             for d in data:
-                row.append(d.get(date))
+                row.append(d.fetchone()[0])
 
             writer.writerow(row)
 
