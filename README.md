@@ -16,7 +16,7 @@ $ pip --version
 Then, all you have to do is run this command to install `netzero` and its dependencies:
 
 ```console
-$ pip install git+https://github.com/RobMor/NetZero.git
+$ pip install netzero
 ```
 
 If you prefer to download the repository yourself you can run the following command
@@ -62,7 +62,7 @@ a database for our data, we will tell `netzero` to create one called `netzero.db
 To collect our data we can run this command:
 
 ```console
-$ netzero collect +psw --start=2019-08-01 -c config.ini netzero.db
+$ netzero collect +psw -s 2019-08-01 -c config.ini -d netzero.db
 ```
 
 Lets break this command down:
@@ -72,17 +72,16 @@ Lets break this command down:
 * `+psw`: adds Pepco (`p`), Solar (`s`) and Weather (`w`) data to the list of
 sources to collect from (You can get a full list of sources from `netzero collect -h`).
 
-* `--start=2019-08-01`: tells `netzero` to only collect data after August 1st 2019.
+* `-s 2019-08-01`: tells `netzero` to only collect data after August 1st 2019.
 The date must follow the format `YYYY-MM-DD`.
 
 * `-c config.ini`: specifies the file name of our configuration file.
 
-* `netzero.db`: gives the filename of our database.
+* `-d netzero.db`: gives the filename of our database.
 
 For more options you can check out the help information using `netzero -h`.
 
 ## TODO
 
-* Formatting data
 * Timezones
 * Deal with missing GSHP data
