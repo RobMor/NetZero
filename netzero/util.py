@@ -1,24 +1,28 @@
 import datetime
 
 
-def time_intervals(start_date,
-                   end_date,
-                   days=1,
-                   seconds=0,
-                   microseconds=0,
-                   milliseconds=0,
-                   minutes=0,
-                   hours=0,
-                   weeks=0):
+def time_intervals(
+    start_date,
+    end_date,
+    days=1,
+    seconds=0,
+    microseconds=0,
+    milliseconds=0,
+    minutes=0,
+    hours=0,
+    weeks=0,
+):
     """A generator that produces inclusive time intervals from start to end date"""
     if start_date <= end_date:
-        delta = datetime.timedelta(days=days,
-                                   seconds=seconds,
-                                   microseconds=microseconds,
-                                   milliseconds=milliseconds,
-                                   minutes=minutes,
-                                   hours=hours,
-                                   weeks=weeks)
+        delta = datetime.timedelta(
+            days=days,
+            seconds=seconds,
+            microseconds=microseconds,
+            milliseconds=milliseconds,
+            minutes=minutes,
+            hours=hours,
+            weeks=weeks,
+        )
 
         intervals = []
         prev = start_date
@@ -30,15 +34,15 @@ def time_intervals(start_date,
 
 
 def iter_days(start_date, end_date):
-    assert isinstance(start_date, datetime.date)
-    assert isinstance(end_date, datetime.date)
+    assert type(start_date) is datetime.date
+    assert type(end_date) is datetime.date
 
     if start_date < end_date:
         delta = datetime.timedelta(days=1)
 
         curr = start_date
         while curr <= end_date:
-            yield curr.date()
+            yield curr
             curr = curr + delta
 
 

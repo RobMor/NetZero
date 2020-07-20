@@ -9,8 +9,8 @@ def load():
 
 def add_args(parser):
     sources_group = parser.add_argument_group(
-        "data sources",
-        description="Flags used to select the supported data sources")
+        "data sources", description="Flags used to select the supported data sources"
+    )
 
     for name, source in load():
         if not hasattr(source, "name"):
@@ -26,4 +26,5 @@ def add_args(parser):
             help=source.summary,
             dest="sources",
             action="append_const",
-            const=source)
+            const=source,
+        )

@@ -1,22 +1,14 @@
-import sqlalchemy
-from sqlalchemy.ext.declarative import declarative_base
+import os.path
 
-
-ModelBase = declarative_base()
+import netzero.dirs
 
 
 def add_args(parser):
-    parser.add_argument("-d",
-                        required=True,
-                        metavar="database",
-                        help="stores data in the specified database",
-                        dest="database")
-
-
-# TODO name sucks
-def main(arguments):
-    engine = sqlalchemy.create_engine("sqlite:///" + arguments.database)
-
-    ModelBase.metadata.create_all(engine)
-
-    return engine
+    parser.add_argument(
+        "-d",
+        required=False,
+        metavar="database",
+        default=os.path.join(netzero.dirs.user_data_dir("netzero"), "database.sqlite3"),
+        help="stores data in the specified database instead of the default",
+        dest="database",
+    )

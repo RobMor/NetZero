@@ -36,15 +36,13 @@ Green Button XML Format for Documentation Purposes:
 </feed>
 """
 
-import json
 import datetime
 import itertools
+import json
+import os
+import sqlite3
 import xml.etree.ElementTree as ETree
 
-import sqlalchemy
-from sqlalchemy import Column, DateTime, Float
-
-import netzero.db
 import netzero.util
 
 tags = {
@@ -64,14 +62,18 @@ class Pepco:
     name = "pepco"
     summary = "Pepco data"
 
-
-    def __init__(self, config):
+    def __init__(self, config, database):
         netzero.util.validate_config(config, entry="pepco", fields=["files"])
 
         self.files = json.loads(config["pepco"]["files"])
 
+        self.conn = sqlite3.connect(database)
 
-    def collect(self, session, start_date=None, end_date=None) -> None:
+        self.conn.execute(
+            "CREATE TABLE IF NOT EXISTS pepco (time TIMESTAMP PRIMARY KEY, watt_hrs FLOAT)"
+        )
+
+    def collect(self, start_date=None, end_date=None) -> None:
         """Collects data from PEPCO XML files.
 
         Collects the raw energy usage data from Pepco's XML files and stores it
@@ -84,6 +86,7 @@ class Pepco:
         end : datetime.date, optional
             The end of the data collection range
         """
+        cur = self.conn.cursor()
         # Combine files into one long list of entries.
         entries = self.concatenate_files(self.files)
 
@@ -101,59 +104,74 @@ class Pepco:
                 for reading in block.findall(tags["IntervalReading"]):
                     # Read start time and usage in Wh from XML file
                     start = int(
-                        reading.find(tags["timePeriod"]).find(
-                            tags["start"]).text)
+                        reading.find(tags["timePeriod"]).find(tags["start"]).text
+                    )
                     start = datetime.datetime.fromtimestamp(start)
 
                     value = int(reading.find(tags["value"]).text)
 
-                    new_entry = PepcoEntry(time=start, watt_hrs=value)
+                    cur.execute(
+                        "INSERT OR IGNORE INTO pepco VALUES (?, ?)", (start, value)
+                    )
 
-                    session.merge(new_entry)
-                
-                session.commit()
+                self.conn.commit()
 
+        cur.close()
 
     def concatenate_files(self, files):
         """
-        Combines the list of entry files for any number of Green Button data files.
+        Generates entries from each of the provided Greenbutton data files.
 
-        :param files: A list of file names to combine
-        :return: An iterator for each of the entry tags
+        :yields: 
         """
         entries = []
-        for file in files:
-            with open(file) as f:
-                tree = ETree.parse(f)
+        for f in files:
+            tree = ETree.parse(f)
+
             root = tree.getroot()
-            # Chain together the previous set of entries to the next set
-            entries = itertools.chain(entries, root.findall(tags["entry"]))
+            entries = root.findall(tags["entry"])
 
-        return entries
+            for entry in entries:
+                yield entry
 
+    def min_date(self):
+        result = self.conn.execute("SELECT date(min(time)) FROM pepco").fetchone()[0]
 
-    def max_date(self, session):
-        return session.query(sqlalchemy.func.max(PepcoEntry.time)).scalar()
+        if result is None:
+            return None
+        else:
+            return datetime.datetime.strptime(result, "%Y-%m-%d").date()
 
+    def max_date(self):
+        result = self.conn.execute("SELECT date(max(time)) FROM pepco").fetchone()[0]
 
-    def min_date(self, session):
-        return session.query(sqlalchemy.func.min(PepcoEntry.time)).scalar()
+        if result is None:
+            return None
+        else:
+            return datetime.datetime.strptime(result, "%Y-%m-%d").date()
 
+    def format(self, start_date, end_date):
+        netzero.util.print_status("Pepco", "Querying Database", newline=True)
 
-    def value(self, session):
-        data = session.query(
-            PepcoEntry.time, sqlalchemy.func.sum(PepcoEntry.watt_hrs) / 1000,
-        ).filter(
-            sqlalchemy.func.strftime("%Y-%m-%d", PepcoEntry.time) == date.strftime("%Y-%m-%d")
-        ).scalar()
+        data = self.conn.execute(
+            """
+            WITH RECURSIVE
+                range(d) AS (
+                    SELECT date(?)
+                    UNION ALL
+                    SELECT date(d, '+1 day')
+                    FROM range
+                    WHERE range.d <= date(?)
+                ),
+                data(d, v) AS (
+                    SELECT date(time), SUM(watt_hrs) / 1000
+                    FROM pepco
+                    GROUP BY date(time)
+                )
+            SELECT v FROM range NATURAL LEFT JOIN data""",
+            (start_date, end_date),
+        )
 
         netzero.util.print_status("Pepco", "Complete", newline=True)
 
-        return {date: value for date, value in data}
-
-
-class PepcoEntry(netzero.db.ModelBase):
-    __tablename__ = "pepco"
-
-    time = Column(DateTime, primary_key=True)
-    watt_hrs = Column(Float, primary_key=True)
+        return data

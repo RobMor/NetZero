@@ -1,14 +1,11 @@
 import datetime
 import json
-import time
-import itertools
+import os
+import sqlite3
 
-import requests
 import bs4
-import sqlalchemy
-from sqlalchemy import Column, DateTime, Float
+import requests
 
-import netzero.db
 import netzero.util
 
 
@@ -19,17 +16,22 @@ class Gshp:
     default_start = datetime.date(2016, 10, 31)
     default_end = datetime.date.today()
 
-
-    def __init__(self, config):
-        netzero.util.validate_config(config,
-                             entry="gshp",
-                             fields=["username", "password"])
+    def __init__(self, config, database):
+        netzero.util.validate_config(
+            config, entry="gshp", fields=["username", "password"]
+        )
 
         self.username = config["gshp"]["username"]
         self.password = config["gshp"]["password"]
 
+        self.conn = sqlite3.connect(database)
+        self.conn.create_aggregate("WATTAGG", 2, WattHourAgg)
 
-    def collect(self, db_session, start_date=None, end_date=None):
+        self.conn.execute(
+            "CREATE TABLE IF NOT EXISTS gshp (time TIMESTAMP PRIMARY KEY, watts FLOAT)"
+        )
+
+    def collect(self, start_date=None, end_date=None):
         """Collects raw furnace usage data from the Symphony website.
 
         Parameters
@@ -44,26 +46,18 @@ class Gshp:
         if end_date is None:
             end_date = self.default_end
 
-        # Move the start date back one day
-        start_date = start_date - datetime.timedelta(days=1)
+        cur = self.conn.cursor()
+
+        netzero.util.print_status("GSHP", "Establishing Session")
 
         session = self.establish_session()
 
-        for _, day in netzero.util.time_intervals(start_date, end_date, days=1):
-            netzero.util.print_status("GSHP", "Collecting: {}".format(day.isoformat()))
+        for day in netzero.util.iter_days(start_date, end_date):
+            netzero.util.print_status(
+                "GSHP", "Collecting: {}".format(day.strftime("%Y-%m-%d"))
+            )
 
             parsed = self.scrape_json(session, day)
-
-            if len(parsed) > 0:
-                start = datetime.datetime.fromtimestamp(int(parsed[0]["1"]))
-                end = datetime.datetime.fromtimestamp(int(parsed[-1]["1"]))
-            else:
-                start = day
-                end = day
-
-            db_session.query(GSHPEntry).filter(
-                GSHPEntry.time.between(start, end)
-            ).delete(synchronize_session=False)
 
             for row in parsed:
                 time = int(row["1"])  # Unix timestamp
@@ -71,15 +65,14 @@ class Gshp:
 
                 value = int(row["78"])  # The number of Watts
 
-                new_entry = GSHPEntry(time=time, watts=value)
-                db_session.add(new_entry)
+                cur.execute("INSERT OR IGNORE INTO gshp VALUES (?, ?)", (time, value))
 
-            db_session.commit()
+            self.conn.commit()
 
+        cur.close()
         session.close()
 
         netzero.util.print_status("GSHP", "Complete", newline=True)
-
 
     def establish_session(self) -> requests.Session:
         """Establishes a session with the symphony website 
@@ -92,7 +85,7 @@ class Gshp:
             "op": "login",
             "redirect": "/",
             "emailaddress": self.username,
-            "password": self.password
+            "password": self.password,
         }
 
         s = requests.Session()
@@ -104,23 +97,19 @@ class Gshp:
         s.mount("https://", retry_adapter)
 
         # Login to the site
-        p = s.post("https://symphony.mywaterfurnace.com/account/login",
-                   data=payload)
+        p = s.post("https://symphony.mywaterfurnace.com/account/login", data=payload)
 
         # Find the tokens that seem to be necessary for the next few steps
         soup = bs4.BeautifulSoup(p.text, "html.parser")
-        field = soup.find("a", attrs={
-            "title": "AWL Tech View"
-        }).attrs["href"][1:]  # Get everything except the /
+        # Get everything except the /
+        field = soup.find("a", attrs={"title": "AWL Tech View"}).attrs["href"][1:]
 
         # Navigate some more
         # Navigating here allows us to actually collect the data.
         # Necessary in order the query the fetch.php script.
-        s.get("https://symphony.mywaterfurnace.com/dealer/historical-data" +
-              field)
+        s.get("https://symphony.mywaterfurnace.com/dealer/historical-data" + field)
 
         return s
-
 
     def scrape_json(self, session, date):
         """Requests some data for a certain day from the Symphony website.
@@ -146,98 +135,97 @@ class Gshp:
             ]
         Every value in the JSON objects is a string
         """
-        params = {"json": '', "date": date.strftime("%m-%d-%Y")}
+        params = {"json": "", "date": date.strftime("%m-%d-%Y")}
         # Putting the date you want information for after this url returns some
         # json containing all the data for that day.
         # Found with some simple network analysis using browser tools...
-        response = session.get("https://symphony.mywaterfurnace.com/fetch.php",
-                               params=params)
+        response = session.get(
+            "https://symphony.mywaterfurnace.com/fetch.php", params=params
+        )
 
         if response.ok:
             return response.json()
         else:
             return []
 
+    def min_date(self):
+        result = self.conn.execute("SELECT date(min(time)) FROM gshp").fetchone()[0]
 
-    def max_date(self, session):
-        return session.query(sqlalchemy.func.max(GSHPEntry.time)).scalar()
+        if result is None:
+            return None
+        else:
+            return datetime.datetime.strptime(result, "%Y-%m-%d").date()
 
+    def max_date(self):
+        result = self.conn.execute("SELECT date(max(time)) FROM gshp").fetchone()[0]
 
-    def min_date(self, session):
-        return session.query(sqlalchemy.func.min(GSHPEntry.time)).scalar()
+        if result is None:
+            return None
+        else:
+            return datetime.datetime.strptime(result, "%Y-%m-%d").date()
 
+    def format(self, start_date, end_date):
+        netzero.util.print_status("GSHP", "Querying Database")
 
-    def format(self, session):
-        netzero.util.print_status("GSHP", "Collecting Data")
-        entries = session.query(GSHPEntry.time, GSHPEntry.watts).order_by(GSHPEntry.time.asc()).all()
-
-        netzero.util.print_status("GSHP", "Grouping Data")
-        entry_groups = itertools.groupby(entries, lambda entry: entry[0].date())
-
-        data = {}
-        for day, entries in entry_groups:
-            netzero.util.print_status("GSHP", "Processing {}".format(day.strftime("%Y-%m-%d")))
-            total = 0
-
-            # midnight
-            prev = datetime.datetime.combine(day, datetime.datetime.min.time())
-            for entry in entries:
-                hours = (entry.time - prev).total_seconds() / 3600
-                prev = entry.time
-
-                kw = entry.watts / 1000
-                kwh = kw * hours
-
-                total += kwh
-
-            data[day] = total
+        data = self.conn.execute(
+            """
+            WITH RECURSIVE
+                range(d) AS (
+                    SELECT date(?)
+                    UNION ALL
+                    SELECT date(d, '+1 day')
+                    FROM range
+                    WHERE range.d <= date(?)
+                ),
+                data(d, v) AS (
+                    SELECT date(time), WATTAGG(time, watts)
+                    FROM gshp
+                    GROUP BY date(time)
+                )
+            SELECT v FROM range NATURAL LEFT JOIN data""",
+            (start_date, end_date),
+        )
 
         netzero.util.print_status("GSHP", "Complete", newline=True)
 
         return data
 
 
-class GSHPEntry(netzero.db.ModelBase):
-    __tablename__ = "gshp"
+# TODO -- Deal with missing data. Hours at a time may be unaccounted for!!!
+class WattHourAgg(object):
+    """An Sqlite3 aggregator to convert GSHP power usage to energy usage
 
-    time = Column(DateTime, primary_key=True)
-    watts = Column(Float)
+    This class is meant to be fed to sqlite3's create_aggregate method. The 
+    constructor defines the beginning state, before any entries have been read. 
+    The step method handles new entries. Finally the finalize method returns 
+    whatever the final result is.
+    """
 
+    def __init__(self):
+        """
+        Initialize values
+        """
+        self.watt_hours = 0
+        self.prev_time = None
 
-# ### TODO -- Deal with missing data. Hours at a time may be unaccounted for!!!
-# class WattHourAgg(object):
-#     """An Sqlite3 aggregator to convert GSHP power usage to energy usage
+    def step(self, time, value):
+        """
+        Read in sorted timeseries data. Compute the amount of time since the
+        previous entry and conert it to hours. Convert the watts to kilowatts 
+        and multiply the time and the wattage to get the energy usage.
+        """
+        time = datetime.datetime.fromisoformat(time)
+        kw = value / 1000
 
-#     This class is meant to be fed to sqlite3's create_aggregate method. The 
-#     constructor defines the beginning state, before any entries have been read. 
-#     The step method handles new entries. Finally the finalize method returns 
-#     whatever the final result is.
-#     """
-#     def __init__(self):
-#         """
-#         Initialize values
-#         """
-#         self.watt_hours = 0
-#         self.prev_time = None
+        if self.prev_time is not None:  # Compute time since previous entry
+            h = (time - self.prev_time).total_seconds() / 3600
+        else:  # Compute time since start of day
+            midnight = time.replace(hour=0, minute=0, second=0)
+            h = (time - midnight).total_seconds() / 3600
 
-#     def step(self, time, value):
-#         """
-#         Read in sorted timeseries data. Compute the amount of time since the
-#         previous entry and conert it to hours. Convert the watts to kilowatts 
-#         and multiply the time and the wattage to get the energy usage.
-#         """
-#         time = datetime.datetime.fromisoformat(time)
-#         kw = value / 1000
+        self.watt_hours += kw * h
 
-#         if self.prev_time:  # Compute time since previous entry
-#             h = (time - self.prev_time).total_seconds() / 3600
-#         else:  # Compute time since start of day
-#             midnight = time.replace(hour=0, minute=0, second=0)
-#             h = (time - midnight).total_seconds() / 3600
+        self.prev_time = time
 
-#         self.watt_hours += kw * h
-
-#         self.prev_time = time
-
-#     def finalize(self):
-#         return self.watt_hours
+    def finalize(self):
+        return self.watt_hours

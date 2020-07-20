@@ -15,7 +15,7 @@ setup(
     long_description=__doc__,
     url="https://github.com/RobMor/NetZero",
     packages=["netzero", "netzero.builtin"],
-    install_requires=["requests", "bs4", "sqlalchemy", "entrypoints"],
+    install_requires=["requests", "bs4", "entrypoints"],
     entry_points={
         "console_scripts": ["netzero=netzero.__main__:main"],
         "netzero.sources": [
