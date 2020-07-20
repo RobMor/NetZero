@@ -31,6 +31,7 @@ def add_args(parser):
 
     parser.add_argument("output", help="the file in which to export data to")
 
+
 def main(arguments):
     config = netzero.config.load_config(arguments.config)
 

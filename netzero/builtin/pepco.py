@@ -169,7 +169,7 @@ class Pepco:
                     GROUP BY date(time)
                 )
             SELECT v FROM range NATURAL LEFT JOIN data""",
-            (start_date, end_date)
+            (start_date, end_date),
         )
 
         netzero.util.print_status("Pepco", "Complete", newline=True)

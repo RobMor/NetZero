@@ -166,7 +166,7 @@ class Weather:
                     GROUP BY date
                 )
             SELECT v FROM range NATURAL LEFT JOIN data""",
-            (start_date, end_date)
+            (start_date, end_date),
         )
 
         netzero.util.print_status("Weather", "Complete", newline=True)

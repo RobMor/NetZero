@@ -3,6 +3,7 @@ import configparser
 
 import netzero.dirs
 
+
 def add_args(parser):
     parser.add_argument(
         "-c",
@@ -12,6 +13,7 @@ def add_args(parser):
         help="loads inputs from the specified INI file instead of the default",
         dest="config",
     )
+
 
 def load_config(path):
     # TODO configuration file generation
