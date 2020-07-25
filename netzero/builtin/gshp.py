@@ -215,7 +215,9 @@ class WattHourAgg(object):
         and multiply the time and the wattage to get the energy usage.
         """
         time = datetime.datetime.fromisoformat(time)
-        kw = value / 1000
+        # We'll say the numbers have 3 significant figures because it's not
+        # specified
+        kw = round(value / 1000, 3)
 
         if self.prev_time is not None:  # Compute time since previous entry
             h = (time - self.prev_time).total_seconds() / 3600
@@ -228,4 +230,4 @@ class WattHourAgg(object):
         self.prev_time = time
 
     def finalize(self):
-        return self.watt_hours
+        return round(self.watt_hours, 3)
