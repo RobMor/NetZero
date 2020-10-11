@@ -1,12 +1,6 @@
 import entrypoints
 
 
-def load():
-    for name, entrypoint in entrypoints.get_group_named("netzero.sources").items():
-        source = entrypoint.load()
-        yield name, source
-
-
 def add_args(parser):
     sources_group = parser.add_argument_group(
         "data sources", description="Flags used to select the supported data sources"
@@ -21,10 +15,16 @@ def add_args(parser):
             source.long_option = source.name
 
         sources_group.add_argument(
-            "+" + source.option,  # Shorthand argument
-            "--" + source.long_option,  # Longform argument
+            "+" + source.option,
+            "--" + source.long_option,
             help=source.summary,
             dest="sources",
             action="append_const",
             const=source,
         )
+
+
+def load():
+    for name, entrypoint in entrypoints.get_group_named("netzero.sources").items():
+        source = entrypoint.load()
+        yield name, source

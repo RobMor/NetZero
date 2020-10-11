@@ -29,21 +29,18 @@ def add_args(parser):
         type=datetime.date.fromisoformat,
     )
 
-    parser.add_argument("output", help="the file in which to export data to")
+    parser.add_argument("output", help="the file to export data to")
 
 
 def main(arguments):
-    config = netzero.config.load_config(arguments.config)
-
     if not hasattr(arguments, "sources") or arguments.sources is None:
         print("No sources specified, nothing to export")
         return
 
-    # Load configurations into sources before collecting data
-    # This lets the user respond to config errors early
-    sources = [source(config, arguments.database) for source in arguments.sources]
+    config = netzero.config.load_config(arguments.config)
 
-    data = []
+    # Load configurations into sources early so user can respond to errors
+    sources = [source(config, arguments.database) for source in arguments.sources]
 
     start_date = arguments.start
     end_date = arguments.end
@@ -56,8 +53,10 @@ def main(arguments):
     if end_date is None:
         end_date = max([source.max_date() for source in sources])
 
+    cursors = []
+
     for source in sources:
-        data.append(source.format(start_date, end_date))
+        cursors.append(source.format(start_date, end_date))
 
     with open(arguments.output, "w") as f:
         writer = csv.writer(f)
@@ -74,8 +73,8 @@ def main(arguments):
             )
 
             row = [date.strftime("%Y-%m-%d")]
-            for d in data:
-                row.append(d.fetchone()[0])
+            for cursor in cursors:
+                row.append(cursor.fetchone()[0])
 
             writer.writerow(row)
 

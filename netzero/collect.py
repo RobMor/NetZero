@@ -30,13 +30,14 @@ def add_args(parser):
 
 
 def main(arguments):
+    if not hasattr(arguments, "sources") or arguments.sources is None:
+        print("No sources specified, nothing to collect")
+        return
+
     config = netzero.config.load_config(arguments.config)
 
-    sources = arguments.sources
-
-    # Load configurations into sources before collecting data
-    # This lets the user respond to config errors early
-    sources = [source(config, arguments.database) for source in sources]
+    # Load configurations into sources early so user can respond to errors
+    sources = [source(config, arguments.database) for source in arguments.sources]
 
     for source in sources:
         source.collect(arguments.start, arguments.end)

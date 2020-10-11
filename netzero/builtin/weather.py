@@ -9,7 +9,7 @@ import netzero.util
 
 class Weather:
     name = "weather"
-    summary = "weather data"
+    summary = "NOAA weather data"
 
     default_start = datetime.date(2014, 1, 1)
     default_end = datetime.date.today()
